@@ -1,2 +1,19 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Local Environment Secrets
 .env
+*.local
+
+# Next.js Build Artifacts
+.next/
+out/
+
+# Testing & Coverage Traces
+coverage/
+.vitest/
+
+# OS/System Trashes
+.DS_Store
+Thumbs.db
+*.log
