@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   registerUserSchema,
   registerTalentSchema,
+  loginSchema,
 } from "@/modules/identity/request";
 
 // 1. Enforce strict token structures for HTTP parameters
@@ -57,5 +58,16 @@ export const API_ROUTES: RouteDefinition[] = [
       "Upgrades an authenticated user to a talent profile status and mounts portfolio/skill criteria within an atomic database transaction window.",
     isProtected: true,
     requestBody: registerTalentSchema,
+  },
+  {
+    method: "POST",
+    version: "v1",
+    module: "Identity",
+    path: "/api/identity/login",
+    summary: "Authenticate user credentials",
+    description:
+      "Verifies incoming handle credentials against system hash signatures, generating short-lived access authorization and setting a secure session cookie.",
+    isProtected: false,
+    requestBody: loginSchema, // Import this schema at the top of the file
   },
 ];

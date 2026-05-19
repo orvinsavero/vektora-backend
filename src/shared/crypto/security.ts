@@ -1,18 +1,24 @@
 import argon2 from "argon2";
+import { SignJWT, jwtVerify } from "jose";
 import { HASH_CONFIG } from "@/modules/identity/identity.constants";
 import { ValidationError } from "@/shared/errors/app-error";
 
 /**
  * Cryptographic Security and Identity Utility.
- * Encapsulates password processing and validation invariants behind a secure,
+ * Encapsulates password processing and token validation invariants behind a secure,
  * black-box abstraction boundary to eliminate side-channel exploit profiling.
  */
-export class SecurityUtil {
+export class Security {
   private static readonly MAX_PASSWORD_BYTES = 72;
+
+  // Convert our environment secret string into an encoded byte matrix for the Web Crypto API
+  private static readonly SECRET_KEY = new TextEncoder().encode(
+    process.env.JWT_SECRET ||
+      "fallback_unsecure_development_secret_key_change_me_in_prod",
+  );
 
   /**
    * Transforms a plain-text password into a secure cryptographic Argon2id hash.
-   * Enforces strict sizing invariants prior to launching heavy computational work.
    */
   static async hashPassword(password: string): Promise<string> {
     if (Buffer.byteLength(password, "utf8") > this.MAX_PASSWORD_BYTES) {
@@ -29,35 +35,49 @@ export class SecurityUtil {
 
   /**
    * Evaluates a raw plain-text string against an existing database hash signature.
-   * Suppresses internal formatting and tracking errors to maintain absolute security opacity.
-   *
-   * @param {string} password - Raw inbound input token from a login attempt.
-   * @param {string} hash - Extracted comparison signature target from persistence layers.
-   * @returns {Promise<boolean>} True only if credentials pass exact cryptographic match parameters.
    */
   static async verifyPassword(
     password: string,
     hash: string,
   ): Promise<boolean> {
-    // Fail-fast silently. Do not throw or leak state if parameters are missing.
-    if (!password || !hash) {
+    if (!password || !hash) return false;
+    if (Buffer.byteLength(password, "utf8") > this.MAX_PASSWORD_BYTES)
       return false;
-    }
-
-    // Fail-fast silently if an attacker attempts an event loop starvation string attack
-    if (Buffer.byteLength(password, "utf8") > this.MAX_PASSWORD_BYTES) {
-      return false;
-    }
 
     try {
       return await argon2.verify(hash, password);
     } catch {
-      /**
-       * Intercept library formatting faults or internal system errors silently.
-       * Returning false guarantees that authentication routes preserve a uniform
-       * output signature, shutting down timing and parameter profiling paths entirely.
-       */
       return false;
     }
+  }
+
+  /**
+   * Mints a state-free, cryptographically signed HS256 JSON Web Token.
+   * Leverages the global Web Crypto API to ensure 100% compatibility across Edge Runtimes.
+   * * @param {Record<string, unknown>} payload - Claims to embed inside the secure string.
+   * @returns {Promise<string>} Web-standard token signature.
+   */
+  static async generateToken(
+    payload: Record<string, unknown>,
+  ): Promise<string> {
+    return new SignJWT(payload)
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("7d") // Set ticket window life to 7 days matching cookie parameters
+      .sign(this.SECRET_KEY);
+  }
+
+  /**
+   * Validates a token signature string and decodes its inner data payload.
+   * Throws errors if the signature is altered, expired, or malformed.
+   * * @param {string} token - Raw authorization token sequence.
+   */
+  static async verifyToken<T = Record<string, unknown>>(
+    token: string,
+  ): Promise<T> {
+    const { payload } = await jwtVerify(token, this.SECRET_KEY, {
+      algorithms: ["HS256"],
+    });
+    return payload as T;
   }
 }

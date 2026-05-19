@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
 import { USER_CONTEXT } from "../identity.constants";
 import { RegisterUserPayload, RegisterTalentPayload } from "../request";
-import { SecurityUtil } from "@/shared/crypto/security";
+import { Security } from "@/shared/crypto/security";
 
 describe("IdentityService Integration Tests", () => {
   // =========================================================================
@@ -90,7 +90,7 @@ describe("IdentityService Integration Tests", () => {
         expect(dbRow?.passwordHash).toBeDefined();
         expect(dbRow?.passwordHash).not.toBe(payload.password);
 
-        const isValidPassword = await SecurityUtil.verifyPassword(
+        const isValidPassword = await Security.verifyPassword(
           payload.password,
           dbRow!.passwordHash,
         );

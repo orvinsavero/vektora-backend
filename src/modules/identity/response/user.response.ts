@@ -27,6 +27,15 @@ export interface SerializedTalentResponse {
   updatedAt: string;
 }
 
+/** Lightweight, high-performance DTO contract for client-side state hydration upon successful login/registration */
+export interface SerializedAuthResponse {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  currentContext: "USER" | "TALENT" | string;
+}
+
 type UserRow = typeof users.$inferSelect;
 type TalentRow = typeof talents.$inferSelect;
 
@@ -72,10 +81,29 @@ export class IdentitySerializer {
       id: talent.id,
       userId: talent.userId,
       bio: talent.bio ?? null,
-      skills: Array.isArray(talent.skills) ? talent.skills : [],
+      skills: Array.isArray(talent.skills) ? (talent.skills as string[]) : [],
       isVerified: talent.isVerified,
       createdAt: (talent.createdAt ?? new Date()).toISOString(),
       updatedAt: (talent.updatedAt ?? new Date()).toISOString(),
+    };
+  }
+
+  /**
+   * Trims down raw database records into a lean, optimized object
+   * specifically built to bootstrap the client-side UI upon authentication.
+   * Eliminates system metadata, balances, and timestamps to optimize wire size.
+   * * @param {UserRow} user - Source internal database selection schema row.
+   * @returns {SerializedAuthResponse} Hardened UI hydration wire profile.
+   */
+  static formatAuthResponse(user: UserRow): SerializedAuthResponse {
+    return {
+      id: user.id,
+      username: user.username,
+      displayName:
+        `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() ||
+        user.username,
+      avatarUrl: user.avatarUrl ?? null,
+      currentContext: user.currentContext,
     };
   }
 }

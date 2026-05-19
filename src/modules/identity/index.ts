@@ -4,3 +4,7 @@ export * from "./services/identity.service";
 
 export * from "./request";
 export * from "./response";
+
+export { loginController } from "./controllers/login";
+export { registerUserController } from "./controllers/register-user";
+export { registerTalentController } from "./controllers/register-talent";
