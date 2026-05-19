@@ -1,6 +1,6 @@
 import { afterAll } from "vitest";
 import { pgClient } from "@/db";
-import { logger } from "@/shared/utils/logger.util";
+import { logger } from "@/shared/telemetry/logger";
 
 afterAll(async () => {
   logger.info(

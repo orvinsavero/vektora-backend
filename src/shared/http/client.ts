@@ -1,5 +1,5 @@
-import { logger } from "./logger.util";
-import { getRequestContext } from "./request-context.util";
+import { logger } from "../telemetry/logger";
+import { getRequestContext } from "../telemetry/context";
 
 interface HttpClientOptions extends RequestInit {
   contextName?: string;

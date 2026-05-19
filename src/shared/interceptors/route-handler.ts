@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { logger } from "./logger.util";
-import { ApiResponse } from "./response.util";
-import { requestStorage } from "./request-context.util";
+import { NextRequest } from "next/server";
+import { logger } from "../telemetry/logger";
+import { ApiResponse } from "../http/response";
+import { requestStorage } from "../telemetry/context";
 
 type VectorHandler = (req: NextRequest) => Promise<Response> | Response;
 

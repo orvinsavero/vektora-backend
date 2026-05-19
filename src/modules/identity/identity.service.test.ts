@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
 import { USER_CONTEXT } from "./identity.constants";
 import { RegisterUserPayload, RegisterTalentPayload } from "./validators";
-import { SecurityUtil } from "@/shared/utils/security.util";
+import { SecurityUtil } from "@/shared/crypto/security";
 
 describe("IdentityService Integration Tests", () => {
   // =========================================================================

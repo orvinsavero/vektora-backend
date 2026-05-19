@@ -2,8 +2,8 @@ import { NextRequest } from "next/server";
 import { IdentityService } from "@/modules/identity/identity.service";
 import { registerUserSchema } from "@/modules/identity/validators";
 import { IdentitySerializer } from "@/modules/identity/serializers";
-import { ApiResponse } from "@/shared/utils/response.util";
-import { traceRoute } from "@/shared/utils/route-handler.util";
+import { ApiResponse } from "@/shared/http/response";
+import { traceRoute } from "@/shared/interceptors/route-handler";
 
 /**
  * Endpoint Handler for New User Profile Registrations.

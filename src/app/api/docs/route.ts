@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateOpenApiDocument } from "@/shared/utils/openapi.util";
+import { generateOpenApiDocument } from "@/modules/docs/utils/openapi.builder";
 
 /**
  * Next.js 15 Segment Configuration Options.

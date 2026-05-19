@@ -4,8 +4,8 @@ import { or, eq, sql } from "drizzle-orm";
 import { USER_CONTEXT } from "./identity.constants";
 import { RegisterUserPayload, RegisterTalentPayload } from "./validators";
 import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
-import { SecurityUtil } from "@/shared/utils/security.util";
-import { logger } from "@/shared/utils/logger.util";
+import { SecurityUtil } from "@/shared/crypto/security";
+import { logger } from "@/shared/telemetry/logger";
 
 export class IdentityService {
   static async registerNewUser(

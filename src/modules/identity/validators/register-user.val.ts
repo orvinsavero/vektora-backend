@@ -81,7 +81,7 @@ type AssertExtends<T extends U, U> = true;
  * Maps incoming validation keys against Drizzle's write layer constraints.
  * Leverages indexed access lookups to cleanly absorb volatile database driver anomalies.
  */
-export type EnforceDrizzleContract = AssertExtends<
+type EnforceDrizzleContract = AssertExtends<
   {
     email: RegisterUserPayload["email"];
     username: RegisterUserPayload["username"];
