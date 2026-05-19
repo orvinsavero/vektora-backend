@@ -5,7 +5,7 @@ import { users } from "./identity.schema";
 import { eq } from "drizzle-orm";
 import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
 import { USER_CONTEXT } from "./identity.constants";
-import { RegisterUserPayload, RegisterTalentPayload } from "./validators"; // Pointed direct to your clean validators module layer
+import { RegisterUserPayload, RegisterTalentPayload } from "./validators";
 import { SecurityUtil } from "@/shared/utils/security.util";
 
 describe("IdentityService Integration Tests", () => {
@@ -13,16 +13,15 @@ describe("IdentityService Integration Tests", () => {
   // DATA FACTORIES
   // =========================================================================
 
-  // Encapsulates valid state baselines to prevent data mutation leakage across test hooks
   const createValidUserPayload = (
     overrides?: Partial<RegisterUserPayload>,
   ): RegisterUserPayload => ({
     email: "mvp_player@vektora.io",
     username: "mvp_player",
-    password: "SecureMvpPassword123!", // Enforces base password layout rules
-    firstName: "Jane", // Split name schema architecture tracking component
-    lastName: "Doe", // Split name schema architecture tracking component
-    birthDate: "1995-06-15", // Clean dynamic ISO primitive satisfying age-floor gates (13+)
+    password: "SecureMvpPassword123!",
+    firstName: "Jane",
+    lastName: "Doe",
+    birthDate: "1995-06-15",
     avatarUrl: "https://storage.vektora.io/avatars/mvp.png",
     ...overrides,
   });
@@ -30,23 +29,22 @@ describe("IdentityService Integration Tests", () => {
   const createValidTalentPayload = (
     overrides?: Partial<RegisterTalentPayload>,
   ): RegisterTalentPayload => ({
-    userId: "00000000-0000-0000-0000-000000000000", // Default invalid UUID anchor, overridden per test block
+    userId: "00000000-0000-0000-0000-000000000000",
     bio: "Building low-poly game assets.",
     skills: ["Blender", "Substance Painter"],
     ...overrides,
   });
 
-  // Enforces data isolation by executing test sequences within an automatically aborted transaction block
-  const runInSandbox = async (testFn: () => Promise<void> | void) => {
+  // Enforces complete isolation by passing the explicit transaction context block down into the test runner
+  const runInSandbox = async (testFn: (tx: any) => Promise<void> | void) => {
     try {
       await db.transaction(async (tx) => {
         await dbStorage.run(tx, async () => {
-          await testFn();
+          await testFn(tx);
         });
         tx.rollback();
       });
     } catch (error: any) {
-      // Intercept expected transaction cancellation markers gracefully to allow test teardown
       if (
         error?.message?.includes("Rollback") ||
         error?.name === "RollbackError" ||
@@ -65,8 +63,8 @@ describe("IdentityService Integration Tests", () => {
     it("should successfully register a new user profile and encrypt credentials", async () => {
       const payload = createValidUserPayload();
 
-      await runInSandbox(async () => {
-        const user = await IdentityService.registerNewUser(payload);
+      await runInSandbox(async (tx) => {
+        const user = await IdentityService.registerNewUser(payload, tx);
 
         expect(user).toBeDefined();
         expect(user.id).toBeDefined();
@@ -74,21 +72,20 @@ describe("IdentityService Integration Tests", () => {
         expect(user.username).toBe(payload.username);
         expect(user.firstName).toBe(payload.firstName);
         expect(user.lastName).toBe(payload.lastName);
-        expect(user.birthDate).toBe(payload.birthDate); // Verifies string matching via the custom column driver mapper
+        expect(user.birthDate).toBe(payload.birthDate);
         expect(user.currentContext).toBe(USER_CONTEXT.USER);
         expect(user.isVerified).toBe(false);
         expect(user.isActive).toBe(true);
 
-        // Fetch the raw database row directly to audit the cryptographic boundary layer
-        const dbRow = await db.query.users.findFirst({
+        // Audit via the isolation parameter reference to avoid fallback connection leakages
+        const dbRow = await tx.query.users.findFirst({
           where: eq(users.id, user.id),
         });
 
         expect(dbRow).toBeDefined();
         expect(dbRow?.passwordHash).toBeDefined();
-        expect(dbRow?.passwordHash).not.toBe(payload.password); // Confirms plain-text is never retained
+        expect(dbRow?.passwordHash).not.toBe(payload.password);
 
-        // Verify that the modular security utility parses the system hash successfully
         const isValidPassword = await SecurityUtil.verifyPassword(
           payload.password,
           dbRow!.passwordHash,
@@ -107,11 +104,11 @@ describe("IdentityService Integration Tests", () => {
         username: "user_b",
       });
 
-      await runInSandbox(async () => {
-        await IdentityService.registerNewUser(firstUser);
+      await runInSandbox(async (tx) => {
+        await IdentityService.registerNewUser(firstUser, tx);
 
         await expect(
-          IdentityService.registerNewUser(secondUser),
+          IdentityService.registerNewUser(secondUser, tx),
         ).rejects.toThrow(
           new ConflictError("This email address is already registered."),
         );
@@ -128,11 +125,11 @@ describe("IdentityService Integration Tests", () => {
         username: "clonewarrior",
       });
 
-      await runInSandbox(async () => {
-        await IdentityService.registerNewUser(firstUser);
+      await runInSandbox(async (tx) => {
+        await IdentityService.registerNewUser(firstUser, tx);
 
         await expect(
-          IdentityService.registerNewUser(secondUser),
+          IdentityService.registerNewUser(secondUser, tx),
         ).rejects.toThrow(new ConflictError("This username is already taken."));
       });
     });
@@ -142,30 +139,36 @@ describe("IdentityService Integration Tests", () => {
     it("should throw a NotFoundError if upgrading a non-existent user profile", async () => {
       const payload = createValidTalentPayload();
 
-      await runInSandbox(async () => {
-        await expect(IdentityService.registerAsTalent(payload)).rejects.toThrow(
+      await runInSandbox(async (tx) => {
+        await expect(
+          IdentityService.registerAsTalent(payload, tx),
+        ).rejects.toThrow(
           new NotFoundError("Target user profile does not exist."),
         );
       });
     });
 
     it("should atomically create a talent entry and upgrade the user context flag", async () => {
-      await runInSandbox(async () => {
+      await runInSandbox(async (tx) => {
         const user = await IdentityService.registerNewUser(
           createValidUserPayload({
             email: "creator@vektora.io",
             username: "asset_master",
           }),
+          tx,
         );
 
         const talentPayload = createValidTalentPayload({ userId: user.id });
-        const talent = await IdentityService.registerAsTalent(talentPayload);
+        const talent = await IdentityService.registerAsTalent(
+          talentPayload,
+          tx,
+        );
 
         expect(talent).toBeDefined();
         expect(talent.userId).toBe(user.id);
         expect(talent.skills).toContain("Blender");
 
-        const updatedUser = await db.query.users.findFirst({
+        const updatedUser = await tx.query.users.findFirst({
           where: eq(users.id, user.id),
         });
         expect(updatedUser?.currentContext).toBe(USER_CONTEXT.TALENT);
@@ -174,42 +177,48 @@ describe("IdentityService Integration Tests", () => {
     });
 
     it("should throw a ConflictError if the target profile is already a talent", async () => {
-      await runInSandbox(async () => {
+      await runInSandbox(async (tx) => {
         const user = await IdentityService.registerNewUser(
           createValidUserPayload({
             email: "double@vektora.io",
             username: "double_talent",
           }),
+          tx,
         );
 
         const payload = createValidTalentPayload({ userId: user.id });
 
-        await IdentityService.registerAsTalent(payload);
+        await IdentityService.registerAsTalent(payload, tx);
 
-        await expect(IdentityService.registerAsTalent(payload)).rejects.toThrow(
+        await expect(
+          IdentityService.registerAsTalent(payload, tx),
+        ).rejects.toThrow(
           new ConflictError("This user is already registered as a talent."),
         );
       });
     });
 
     it("should throw a ConflictError if attempting to upgrade a deactivated user profile", async () => {
-      await runInSandbox(async () => {
+      await runInSandbox(async (tx) => {
         const user = await IdentityService.registerNewUser(
           createValidUserPayload({
             email: "banned_user@vektora.io",
             username: "rule_breaker",
           }),
+          tx,
         );
 
-        // Manually flip account state to simulate system suspension action
-        await db
+        // Target modifications explicitly through the sanboxed tx context reference
+        await tx
           .update(users)
           .set({ isActive: false })
           .where(eq(users.id, user.id));
 
         const payload = createValidTalentPayload({ userId: user.id });
 
-        await expect(IdentityService.registerAsTalent(payload)).rejects.toThrow(
+        await expect(
+          IdentityService.registerAsTalent(payload, tx),
+        ).rejects.toThrow(
           new ConflictError(
             "Action denied. This user account profile is currently deactivated.",
           ),

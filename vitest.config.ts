@@ -13,8 +13,7 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.ts"],
     env: {
-      APP_ENV: "test",
-      // Safely binds the test database string extracted by dotenv above
+      APP_ENV: process.env.APP_ENV || "test",
       DATABASE_URL: process.env.DATABASE_URL || "",
     },
   },
