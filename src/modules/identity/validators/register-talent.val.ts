@@ -2,7 +2,9 @@ import { talents } from "../identity.schema";
 import { IDENTITY_LIMITS } from "../identity.constants";
 import { z } from "zod";
 
-// Runtime request validation contract enforcing input size constraints and primitive structural rules
+/**
+ * Inbound request validation contract enforcing size constraints and layout primitives.
+ */
 export const registerTalentSchema = z.object({
   userId: z.string().uuid("Invalid user ID format. Must be a valid UUID."),
   bio: z
@@ -16,6 +18,7 @@ export const registerTalentSchema = z.object({
     .array(
       z
         .string()
+        .trim()
         .min(IDENTITY_LIMITS.skills.itemMin, "Skill name cannot be empty."),
     )
     .min(

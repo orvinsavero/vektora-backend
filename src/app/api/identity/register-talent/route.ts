@@ -1,14 +1,13 @@
 import { NextRequest } from "next/server";
 import { IdentityService } from "@/modules/identity/identity.service";
-import {
-  registerTalentSchema,
-  IdentityResponseDto,
-} from "@/modules/identity/dto";
+import { registerTalentSchema } from "@/modules/identity/validators";
+import { IdentitySerializer } from "@/modules/identity/serializers";
 import { ApiResponse } from "@/shared/utils/response.util";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    // Fallback block guarantees an object structure even if the incoming payload stream is empty
+    const body = await req.json().catch(() => ({}));
 
     // Prevent uncaught runtime exceptions by returning parsing states instead of throwing
     const result = registerTalentSchema.safeParse(body);
@@ -21,7 +20,7 @@ export async function POST(req: NextRequest) {
     const rawTalent = await IdentityService.registerAsTalent(result.data);
 
     // Sanitize database objects at the API boundary to prevent data leak invariant violations
-    const sanitizedTalent = IdentityResponseDto.formatTalent(rawTalent);
+    const sanitizedTalent = IdentitySerializer.formatTalent(rawTalent);
 
     return ApiResponse.success(sanitizedTalent, 201);
   } catch (error) {

@@ -3,6 +3,7 @@ node_modules/
 
 # Local Environment Secrets
 .env
+.env.test
 *.local
 
 # Next.js Build Artifacts
