@@ -58,7 +58,6 @@ export const AUTH_COOKIE_CONFIG = {
   options: {
     path: "/",
     httpOnly: true, // Shields tokens from client-side script contexts (XSS defenses)
-    secure: CONFIG.isProduction || CONFIG.isStaging, // Clamps TLS requirement to production channels
     sameSite: "strict" as const, // Hardens perimeter against cross-site request forgery entries (CSRF)
     maxAge: 60 * 60 * 24 * 7, // Symmetric 7-day expiration window lifecycle
   },

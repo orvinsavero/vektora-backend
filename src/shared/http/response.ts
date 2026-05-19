@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 import { logger } from "../telemetry/logger";
 import { getRequestContext } from "../telemetry/context";
 import { AUTH_COOKIE_CONFIG } from "@/modules/identity/identity.constants";
+import { CONFIG } from "@/config/env.config";
 
 export interface ApiResponseEnvelope<T = any> {
   success: boolean;
@@ -133,7 +134,7 @@ export class CookieManager {
     response.cookies.set(AUTH_COOKIE_CONFIG.name, token, {
       path: AUTH_COOKIE_CONFIG.options.path,
       httpOnly: AUTH_COOKIE_CONFIG.options.httpOnly,
-      secure: AUTH_COOKIE_CONFIG.options.secure,
+      secure: CONFIG.isProduction || CONFIG.isStaging,
       sameSite: AUTH_COOKIE_CONFIG.options.sameSite,
       maxAge: AUTH_COOKIE_CONFIG.options.maxAge,
     });
