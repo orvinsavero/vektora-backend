@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { users } from "../identity.schema";
 import { IDENTITY_LIMITS } from "../identity.constants";
-import { usernameRules, passwordRules, birthDateRules } from "./rules.val";
+import { usernameRules, passwordRules, birthDateRules } from "./rules";
 
 /**
  * Inbound Request Validation Contract for User Profiles.

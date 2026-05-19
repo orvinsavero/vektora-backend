@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { AppError } from "../errors/app-error";
 import { ZodError } from "zod";
-import { logger } from "./logger.util";
-import { getRequestContext } from "./request-context.util";
+import { logger } from "../telemetry/logger";
+import { getRequestContext } from "../telemetry/context";
 
 export interface ApiResponseEnvelope<T = any> {
   success: boolean;

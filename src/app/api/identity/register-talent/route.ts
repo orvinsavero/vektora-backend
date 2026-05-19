@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { IdentityService } from "@/modules/identity/identity.service";
-import { registerTalentSchema } from "@/modules/identity/validators";
-import { IdentitySerializer } from "@/modules/identity/serializers";
+import { registerTalentSchema } from "@/modules/identity/request";
+import { IdentitySerializer } from "@/modules/identity/response";
 import { ApiResponse } from "@/shared/http/response";
 import { traceRoute } from "@/shared/interceptors/route-handler";
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   registerUserSchema,
   registerTalentSchema,
-} from "@/modules/identity/validators";
+} from "@/modules/identity/request";
 
 // 1. Enforce strict token structures for HTTP parameters
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
