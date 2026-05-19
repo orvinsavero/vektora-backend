@@ -1,3 +1,4 @@
+import { CONFIG } from "@/config/env.config";
 /**
  * Structural Field Sizing and Array Length Constraints.
  * Serves as the centralized registry for Zod perimeter schemas and Drizzle database column definitions.
@@ -49,9 +50,25 @@ export const HASH_CONFIG = {
 } as const;
 
 /**
+ * Production-Hardened HTTP-Only Session Cookie Parameters.
+ * Dynamically toggles strict security gates to ensure fluid local development executions.
+ */
+export const AUTH_COOKIE_CONFIG = {
+  name: "token",
+  options: {
+    path: "/",
+    httpOnly: true, // Shields tokens from client-side script contexts (XSS defenses)
+    secure: CONFIG.isProduction || CONFIG.isStaging, // Clamps TLS requirement to production channels
+    sameSite: "strict" as const, // Hardens perimeter against cross-site request forgery entries (CSRF)
+    maxAge: 60 * 60 * 24 * 7, // Symmetric 7-day expiration window lifecycle
+  },
+} as const;
+
+/**
  * Inferred Domain Type Utility Matrices.
  * Exposes internal literal values as clean primitive union tokens for type annotations across the app.
  */
 export type IdentityLimitsType = typeof IDENTITY_LIMITS;
 export type UserContextType = (typeof USER_CONTEXT)[keyof typeof USER_CONTEXT];
 export type HashConfigType = typeof HASH_CONFIG;
+export type AuthCookieConfigType = typeof AUTH_COOKIE_CONFIG;

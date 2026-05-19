@@ -3,6 +3,7 @@ import { AppError } from "../errors/app-error";
 import { ZodError } from "zod";
 import { logger } from "../telemetry/logger";
 import { getRequestContext } from "../telemetry/context";
+import { AUTH_COOKIE_CONFIG } from "@/modules/identity/identity.constants";
 
 export interface ApiResponseEnvelope<T = any> {
   success: boolean;
@@ -118,5 +119,23 @@ export class ApiResponse {
 
     fallbackResponse.headers.set("x-request-id", requestId);
     return fallbackResponse;
+  }
+}
+
+export class CookieManager {
+  /**
+   * Encapsulates cookie generation mechanics using standard framework abstractions.
+   * Dynamically formats configuration flags without raw string array stitching.
+   * * @param {NextResponse} response - Inbound target HTTP server response interface.
+   * @param {string} token - Cryptographically signed authentication session string.
+   */
+  static injectAuthCookie(response: NextResponse, token: string): void {
+    response.cookies.set(AUTH_COOKIE_CONFIG.name, token, {
+      path: AUTH_COOKIE_CONFIG.options.path,
+      httpOnly: AUTH_COOKIE_CONFIG.options.httpOnly,
+      secure: AUTH_COOKIE_CONFIG.options.secure,
+      sameSite: AUTH_COOKIE_CONFIG.options.sameSite,
+      maxAge: AUTH_COOKIE_CONFIG.options.maxAge,
+    });
   }
 }
