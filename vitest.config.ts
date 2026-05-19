@@ -2,7 +2,8 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import dotenv from "dotenv";
 
-dotenv.config({ path: ".env" });
+// Explicitly pull variables from your test environment configuration file right now
+dotenv.config({ path: ".env.test" });
 
 export default defineConfig({
   plugins: [react()],
@@ -13,8 +14,8 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     env: {
       APP_ENV: "test",
-      // Remap the active database connection string to point directly to the isolated test database instance
-      DATABASE_URL: process.env.TEST_DATABASE_URL,
+      // Safely binds the test database string extracted by dotenv above
+      DATABASE_URL: process.env.DATABASE_URL || "",
     },
   },
   resolve: {

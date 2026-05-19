@@ -2,16 +2,17 @@ import { db, dbStorage, DbClient, DbTransaction } from "@/db";
 import { users, talents } from "./identity.schema";
 import { or, eq, sql } from "drizzle-orm";
 import { USER_CONTEXT } from "./identity.constants";
-import { RegisterUserPayload, RegisterTalentPayload } from "./dto";
+import { RegisterUserPayload, RegisterTalentPayload } from "./validators"; // Swapped out deprecated dto folder path
 import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
+import { SecurityUtil } from "@/shared/utils/security.util";
 import { logger } from "@/shared/utils/logger.util";
 
 export class IdentityService {
   /**
    * Evaluates identity uniqueness invariants and materializes new baseline user records.
-   * Supports explicit dependency injection to bypass default pool proxies during testing or cross-domain orchestrations.
+   * Performs asynchronous password hashing using Argon2id prior to row insertion.
    */
-  static async createNewUser(
+  static async registerNewUser(
     payload: RegisterUserPayload,
     client: DbClient | DbTransaction = db,
   ) {
@@ -31,23 +32,28 @@ export class IdentityService {
       }
     }
 
+    // Intercept raw plain-text payload entry and convert it to a secure cryptographic hash signature
+    const passwordHash = await SecurityUtil.hashPassword(payload.password);
+
     const [newUser] = await client
       .insert(users)
       .values({
         email: payload.email,
         username: payload.username,
-        fullName: payload.fullName || null,
-        avatarUrl: payload.avatarUrl,
+        passwordHash,
+        firstName: payload.firstName || null, // Clean split mapping field execution
+        lastName: payload.lastName || null, // Clean split mapping field execution
+        birthDate: payload.birthDate, // Clean native YYYY-MM-DD validation string passed direct to driver
+        avatarUrl: payload.avatarUrl, // Handled cleanly by schema defaults if optional payload values are missing
         currentContext: USER_CONTEXT.USER,
       })
-      .returning();
+      .returning(); // Returns the full table row structure safely
 
     return newUser;
   }
 
   /**
    * Executes a multi-stage transactional lifecycle operation to link and upgrade a user to a talent profile status.
-   * Leverages isolated transactional boundaries with safe error telemetry capture prior to executing database engine rollbacks.
    */
   static async registerAsTalent(
     payload: RegisterTalentPayload,
@@ -60,6 +66,12 @@ export class IdentityService {
     });
     if (!userRow) {
       throw new NotFoundError("Target user profile does not exist.");
+    }
+
+    if (!userRow.isActive) {
+      throw new ConflictError(
+        "Action denied. This user account profile is currently deactivated.",
+      );
     }
 
     const existingTalent = await client.query.talents.findFirst({
@@ -91,13 +103,10 @@ export class IdentityService {
 
           return newTalent;
         } catch (error) {
-          // Log specific structural details or connection faults before bubble-up truncation destroys execution state
           logger.error(
             { userId, err: error },
             "➔ Transaction execution failed in registerAsTalent service cascade. Rollback triggered automatically.",
           );
-
-          // Escalate the raw exception to let the database client orchestrate the physical rollback and preserve custom app error mappings
           throw error;
         }
       });
