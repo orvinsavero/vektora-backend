@@ -1,8 +1,8 @@
 import { db, DbClient, DbTransaction } from "@/db";
-import { users, talents } from "./identity.schema";
+import { users, talents } from "../identity.schema";
 import { or, eq, sql } from "drizzle-orm";
-import { USER_CONTEXT } from "./identity.constants";
-import { RegisterUserPayload, RegisterTalentPayload } from "./request";
+import { USER_CONTEXT } from "../identity.constants";
+import { RegisterUserPayload, RegisterTalentPayload } from "../request";
 import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
 import { SecurityUtil } from "@/shared/crypto/security";
 import { logger } from "@/shared/telemetry/logger";
