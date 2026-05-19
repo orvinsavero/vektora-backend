@@ -8,7 +8,6 @@ import { requireAuth } from "@/shared/interceptors/auth-guard";
  */
 export const POST = traceRoute(
   requireAuth(async (req) => {
-    // TypeScript implicitly infers req as AuthenticatedNextRequest from requireAuth
     return registerTalentController(req);
   }),
 );
