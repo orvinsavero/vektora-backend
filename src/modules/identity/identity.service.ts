@@ -7,19 +7,7 @@ import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
 import { SecurityUtil } from "@/shared/utils/security.util";
 import { logger } from "@/shared/utils/logger.util";
 
-/**
- * Identity Management Domain Service Layer.
- * Orchestrates transaction-safe business procedures, cryptographically seals credentials,
- * and maintains data invariants across user profile lifecycle mutations.
- */
 export class IdentityService {
-  /**
-   * Evaluates identity uniqueness invariants and materializes new baseline user records.
-   * Performs asynchronous password hashing using Argon2id prior to row insertion.
-   * * @param {RegisterUserPayload} payload - Validated user registration inputs.
-   * @param {DbClient | DbTransaction} [client=db] - Ambient execution client or active transaction proxy runner.
-   * @returns {Promise<typeof users.$inferSelect>} Freshly created database user row record.
-   */
   static async registerNewUser(
     payload: RegisterUserPayload,
     client: DbClient | DbTransaction = db,
@@ -40,7 +28,6 @@ export class IdentityService {
       }
     }
 
-    // Intercept plain-text credential arrays and generate a secure Argon2id cryptographic signature string
     const passwordHash = await SecurityUtil.hashPassword(payload.password);
 
     const [newUser] = await client
@@ -60,13 +47,6 @@ export class IdentityService {
     return newUser;
   }
 
-  /**
-   * Executes a multi-stage operational lifecycle upgrade to link and transition a user to talent status.
-   * Leverages the ambient execution context or parameters to guarantee execution atomicity.
-   * * @param {RegisterTalentPayload} payload - Validated profile configuration inputs.
-   * @param {DbClient | DbTransaction} [client=db] - Ambient execution client or active transaction proxy runner.
-   * @returns {Promise<typeof talents.$inferSelect>} Freshly created database talent row record.
-   */
   static async registerAsTalent(
     payload: RegisterTalentPayload,
     client: DbClient | DbTransaction = db,
@@ -96,10 +76,6 @@ export class IdentityService {
     }
 
     try {
-      /**
-       * Execute queries directly against the scoped client context reference proxy.
-       * Eliminates nested inner transaction allocations if invoked inside an active controller transaction block.
-       */
       const [newTalent] = await client
         .insert(talents)
         .values({
@@ -121,7 +97,7 @@ export class IdentityService {
     } catch (error) {
       logger.error(
         { userId, err: error },
-        "➔ Operational failure inside registerAsTalent database write execution stream pipeline.",
+        "DATABASE WRITE FAULT: Operational failure inside registerAsTalent database write execution stream pipeline.",
       );
       throw error;
     }

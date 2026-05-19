@@ -1,62 +1,36 @@
 import { NextRequest } from "next/server";
-import { db, dbStorage } from "@/db";
 import { IdentityService } from "@/modules/identity/identity.service";
 import { registerUserSchema } from "@/modules/identity/validators";
 import { IdentitySerializer } from "@/modules/identity/serializers";
 import { ApiResponse } from "@/shared/utils/response.util";
-import { ValidationError } from "@/shared/errors/app-error";
+import { traceRoute } from "@/shared/utils/route-handler.util";
 
 /**
  * Endpoint Handler for New User Profile Registrations.
- * Intercepts inbound account creation payloads, executes structural validation policies,
- * hashes plaintext credentials, and safely commits records inside an isolated transaction.
+ * Intercepts account creation requests and tracks processing metrics natively.
  *
  * @param {NextRequest} req - Inbound framework request stream proxy.
  * @returns {Promise<Response>} Structured serialization response envelope.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+export const POST = traceRoute(async (req: NextRequest): Promise<Response> => {
   try {
-    let body: unknown;
+    const body = await req.json();
 
-    try {
-      // Parse raw stream buffer into JSON context primitives
-      body = await req.json();
-    } catch {
-      /**
-       * Throws a native ValidationError to signal bad JSON payload formatting.
-       * Automatically maps upstream to a clean 400 response code.
-       */
-      throw new ValidationError("Invalid JSON payload formatting.");
-    }
+    // Validate request constraints at the boundary perimeter
+    const validatedData = registerUserSchema.parse(body);
 
-    // Execute field constraint checks at the perimeter boundary layer
-    const validationResult = registerUserSchema.safeParse(body);
+    // Delegate business logic processing down to the service layer
+    const rawUser = await IdentityService.registerNewUser(validatedData);
 
-    if (!validationResult.success) {
-      return ApiResponse.handle(validationResult.error);
-    }
+    // Apply exact data translation formatting rules to strip internal database symbols
+    const serializedUser = IdentitySerializer.formatUser(rawUser);
 
-    /**
-     * Enforce Boundary Transaction Isolation.
-     * Guarantees that the user lookup, validation check, and table mutations
-     * execute within a single atomic database context transaction block.
-     */
-    const sanitizedUser = await db.transaction(async (tx) => {
-      return await dbStorage.run(tx, async () => {
-        // Pass the validated payload down through the transaction sandbox proxy
-        const rawUser = await IdentityService.registerNewUser(
-          validationResult.data,
-          tx,
-        );
-
-        // Enforce structural translation mapping rules prior to escaping isolation limits
-        return IdentitySerializer.formatUser(rawUser);
-      });
-    });
-
-    return ApiResponse.success(sanitizedUser, 201);
+    return ApiResponse.success(serializedUser, 201);
   } catch (error) {
-    // Catch-all block channels domain-specific exceptions directly to structural JSON wrappers
+    /**
+     * Catches and channels exceptions straight to structural JSON wrappers.
+     * Automatically appends correlation trace IDs from the ambient context store.
+     */
     return ApiResponse.handle(error);
   }
-}
+});

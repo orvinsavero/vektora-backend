@@ -2,11 +2,8 @@ import { NextResponse } from "next/server";
 import { AppError } from "../errors/app-error";
 import { ZodError } from "zod";
 import { logger } from "./logger.util";
+import { getRequestContext } from "./request-context.util";
 
-/**
- * Standard Envelope Protocol for Public API Responses.
- * Guarantees a predictable wire format for frontends and consumers.
- */
 export interface ApiResponseEnvelope<T = any> {
   success: boolean;
   data: T | null;
@@ -17,22 +14,14 @@ export interface ApiResponseEnvelope<T = any> {
   timestamp: string;
 }
 
-/**
- * Unified Boundary Response and Global Exception Handler.
- * Intercepts execution yields at the API perimeter to structure payloads and log system state shifts.
- */
 export class ApiResponse {
-  /**
-   * Encapsulates data results within a standardized success layout protocol.
-   * * @param {T} data - Main response cargo entity payload.
-   * @param {number} [statusCode=200] - Inbound HTTP response confirmation code.
-   * @returns {NextResponse<ApiResponseEnvelope<T>>} Structured Next.js response proxy.
-   */
   static success<T>(
     data: T,
     statusCode: number = 200,
   ): NextResponse<ApiResponseEnvelope<T>> {
-    return NextResponse.json(
+    const { requestId } = getRequestContext();
+
+    const response = NextResponse.json(
       {
         success: true,
         data,
@@ -41,30 +30,24 @@ export class ApiResponse {
       },
       { status: statusCode },
     );
+
+    response.headers.set("x-request-id", requestId);
+    return response;
   }
 
-  /**
-   * Intercepts, classifies, and serializes system exceptions into consistent wire errors.
-   * Dynamically switches logging priority layers based on operational severity.
-   * * @param {unknown} error - Caught anomaly exception or raw thrown structure.
-   * @returns {NextResponse<ApiResponseEnvelope<null>>} Structured Next.js error response proxy.
-   */
   static handle(error: unknown): NextResponse<ApiResponseEnvelope<null>> {
     const isProduction = process.env.NODE_ENV === "production";
     const timestamp = new Date().toISOString();
+    const { requestId } = getRequestContext();
 
-    // Branch A: Catch-all block for explicit application-level operational errors
     if (error instanceof AppError) {
       const logPayload = {
+        requestId,
         errType: error.constructor.name,
         statusCode: error.statusCode,
         isOperational: error.isOperational,
       };
 
-      /**
-       * Dynamically shift log levels based on HTTP status codes.
-       * 4xx client infractions are warnings; anything else indicates an unexpected error path.
-       */
       if (error.statusCode >= 500) {
         logger.error({ ...logPayload, err: error }, error.message);
       } else {
@@ -82,10 +65,9 @@ export class ApiResponse {
       );
     }
 
-    // Branch B: Catch-all block for validation parsing constraint failures
     if (error instanceof ZodError) {
       logger.warn(
-        { errType: "ZodValidationError" },
+        { requestId, errType: "ZodValidationError" },
         "Invalid request payload constraints identified at perimeter boundary.",
       );
 
@@ -106,19 +88,19 @@ export class ApiResponse {
       );
     }
 
-    // Branch C: Unhandled system faults, un-caught engine panics, or database connectivity losses
     logger.error(
       {
+        requestId,
         errType: error instanceof Error ? error.name : "UnknownSystemFault",
         err:
           error instanceof Error
             ? { message: error.message, stack: error.stack }
             : error,
       },
-      "➔ [FATAL SYSTEM EXHUSTION BOUNDARY INTERCEPT]",
+      "CRITICAL: FATAL SYSTEM EXHAUSTION BOUNDARY INTERCEPT",
     );
 
-    return NextResponse.json(
+    const fallbackResponse = NextResponse.json(
       {
         success: false,
         data: null,
@@ -133,5 +115,8 @@ export class ApiResponse {
       },
       { status: 500 },
     );
+
+    fallbackResponse.headers.set("x-request-id", requestId);
+    return fallbackResponse;
   }
 }

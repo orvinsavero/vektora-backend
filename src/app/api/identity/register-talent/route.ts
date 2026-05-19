@@ -1,51 +1,38 @@
 import { NextRequest } from "next/server";
-import { db, dbStorage } from "@/db";
 import { IdentityService } from "@/modules/identity/identity.service";
 import { registerTalentSchema } from "@/modules/identity/validators";
 import { IdentitySerializer } from "@/modules/identity/serializers";
 import { ApiResponse } from "@/shared/utils/response.util";
-import { ValidationError } from "@/shared/errors/app-error"; // Uses your valid native class
+import { traceRoute } from "@/shared/utils/route-handler.util";
 
 /**
  * Endpoint Handler for Talent Profile Conversions.
  * Intercepts incoming user account contextual upgrades, enforces strict validation bounds,
- * and executes structural state migrations inside a secure transactional boundary.
+ * and tracks performance telemetry metrics natively.
  *
  * @param {NextRequest} req - Inbound framework request stream proxy.
  * @returns {Promise<Response>} Structured serialization response envelope.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+export const POST = traceRoute(async (req: NextRequest): Promise<Response> => {
   try {
-    let body: unknown;
+    const body = await req.json();
 
-    try {
-      body = await req.json();
-    } catch {
-      /**
-       * Throws a native ValidationError to signal bad JSON payload formatting.
-       * Automatically maps upstream to a clean 400 response code.
-       */
-      throw new ValidationError("Invalid JSON payload formatting.");
-    }
+    // Validate request constraints at the boundary perimeter
+    const validatedData = registerTalentSchema.parse(body);
 
-    const validationResult = registerTalentSchema.safeParse(body);
+    // Delegate processing down to the service layer (internal transaction handled inside service)
+    const rawTalent = await IdentityService.registerAsTalent(validatedData);
 
-    if (!validationResult.success) {
-      return ApiResponse.handle(validationResult.error);
-    }
+    // Apply exact data translation formatting rules to strip internal database symbols
+    const serializedTalent = IdentitySerializer.formatTalent(rawTalent);
 
-    const sanitizedTalent = await db.transaction(async (tx) => {
-      return await dbStorage.run(tx, async () => {
-        const rawTalent = await IdentityService.registerAsTalent(
-          validationResult.data,
-          tx,
-        );
-        return IdentitySerializer.formatTalent(rawTalent);
-      });
-    });
-
-    return ApiResponse.success(sanitizedTalent, 201);
+    return ApiResponse.success(serializedTalent, 201);
   } catch (error) {
+    /**
+     * Centralized exception interceptor.
+     * Automatically extracts AsyncLocalStorage tracking tokens to log anomalies
+     * before mapping raw faults to predictable HTTP status structures.
+     */
     return ApiResponse.handle(error);
   }
-}
+});
