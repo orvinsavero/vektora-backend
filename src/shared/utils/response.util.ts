@@ -3,6 +3,10 @@ import { AppError } from "../errors/app-error";
 import { ZodError } from "zod";
 import { logger } from "./logger.util";
 
+/**
+ * Standard Envelope Protocol for Public API Responses.
+ * Guarantees a predictable wire format for frontends and consumers.
+ */
 export interface ApiResponseEnvelope<T = any> {
   success: boolean;
   data: T | null;
@@ -13,9 +17,16 @@ export interface ApiResponseEnvelope<T = any> {
   timestamp: string;
 }
 
+/**
+ * Unified Boundary Response and Global Exception Handler.
+ * Intercepts execution yields at the API perimeter to structure payloads and log system state shifts.
+ */
 export class ApiResponse {
   /**
    * Encapsulates data results within a standardized success layout protocol.
+   * * @param {T} data - Main response cargo entity payload.
+   * @param {number} [statusCode=200] - Inbound HTTP response confirmation code.
+   * @returns {NextResponse<ApiResponseEnvelope<T>>} Structured Next.js response proxy.
    */
   static success<T>(
     data: T,
@@ -33,27 +44,39 @@ export class ApiResponse {
   }
 
   /**
-   * Intercepts, classifies, and serializes exceptions into consistent error response payloads.
+   * Intercepts, classifies, and serializes system exceptions into consistent wire errors.
+   * Dynamically switches logging priority layers based on operational severity.
+   * * @param {unknown} error - Caught anomaly exception or raw thrown structure.
+   * @returns {NextResponse<ApiResponseEnvelope<null>>} Structured Next.js error response proxy.
    */
   static handle(error: unknown): NextResponse<ApiResponseEnvelope<null>> {
     const isProduction = process.env.NODE_ENV === "production";
+    const timestamp = new Date().toISOString();
 
-    // Branch A: Catch-all block for explicit application layer operational errors
+    // Branch A: Catch-all block for explicit application-level operational errors
     if (error instanceof AppError) {
-      logger.warn(
-        {
-          errType: error.constructor.name,
-          statusCode: error.statusCode,
-        },
-        error.message,
-      );
+      const logPayload = {
+        errType: error.constructor.name,
+        statusCode: error.statusCode,
+        isOperational: error.isOperational,
+      };
+
+      /**
+       * Dynamically shift log levels based on HTTP status codes.
+       * 4xx client infractions are warnings; anything else indicates an unexpected error path.
+       */
+      if (error.statusCode >= 500) {
+        logger.error({ ...logPayload, err: error }, error.message);
+      } else {
+        logger.warn(logPayload, error.message);
+      }
 
       return NextResponse.json(
         {
           success: false,
           data: null,
           error: { message: error.message },
-          timestamp: new Date().toISOString(),
+          timestamp,
         },
         { status: error.statusCode },
       );
@@ -63,7 +86,7 @@ export class ApiResponse {
     if (error instanceof ZodError) {
       logger.warn(
         { errType: "ZodValidationError" },
-        "Invalid request payload constraints.",
+        "Invalid request payload constraints identified at perimeter boundary.",
       );
 
       return NextResponse.json(
@@ -77,14 +100,23 @@ export class ApiResponse {
               message: err.message,
             })),
           },
-          timestamp: new Date().toISOString(),
+          timestamp,
         },
         { status: 400 },
       );
     }
 
-    // Branch C: Unhandled system faults or infrastructure-level crash exceptions
-    logger.error({ err: error }, "➔ [FATAL SYSTEM CRASH]");
+    // Branch C: Unhandled system faults, un-caught engine panics, or database connectivity losses
+    logger.error(
+      {
+        errType: error instanceof Error ? error.name : "UnknownSystemFault",
+        err:
+          error instanceof Error
+            ? { message: error.message, stack: error.stack }
+            : error,
+      },
+      "➔ [FATAL SYSTEM EXHUSTION BOUNDARY INTERCEPT]",
+    );
 
     return NextResponse.json(
       {
@@ -97,7 +129,7 @@ export class ApiResponse {
               ? error.message
               : "Unknown internal error.",
         },
-        timestamp: new Date().toISOString(),
+        timestamp,
       },
       { status: 500 },
     );

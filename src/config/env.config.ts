@@ -1,8 +1,13 @@
 import { z } from "zod";
 
-// Runtime schema definitions to enforce schema validity on process environment bounds
+/**
+ * Runtime Environment Variable Validation Schema.
+ * Enforces configuration correctness across core process boundaries at boot time.
+ * Declares fallback defaults for non-critical options and defines strict parsing invariants.
+ */
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
+
   DATABASE_URL: z
     .string()
     .url("DATABASE_URL must be a valid connection string."),
@@ -15,32 +20,62 @@ const envSchema = z.object({
     .enum(["fatal", "error", "warn", "info", "debug", "trace"])
     .default("info"),
 
-  // Cast incoming string literals into clean boolean primitives during preprocessing
+  /**
+   * Raw String Literal Preprocessor for Boolean Flags.
+   * Intercepts diverse truthy/falsy environment inputs from container engines
+   * and maps them safely to clean runtime boolean primitives.
+   */
   LOG_SYNC: z
-    .preprocess(
-      (val) => (typeof val === "string" ? val.toLowerCase() === "true" : false),
-      z.boolean(),
-    )
+    .preprocess((val) => {
+      if (typeof val === "string") {
+        const normalized = val.toLowerCase();
+        if (["true", "1", "yes"].includes(normalized)) return true;
+        if (["false", "0", "no", ""].includes(normalized)) return false;
+      }
+      return val;
+    }, z.boolean())
     .default(false),
 });
 
-// Intercept environment parsing states prior to core application boot sequences
+// Intercept configuration states prior to core application boot sequences
 const parsedEnv = envSchema.safeParse(process.env);
 
 if (!parsedEnv.success) {
-  // Halt process execution instantly if system invariants or configurations are broken
-  console.error("❌ CRITICAL: Invalid environment configuration options:");
-  console.error(JSON.stringify(parsedEnv.error.format(), null, 2));
-  process.exit(1);
+  const errorDetails = JSON.stringify(parsedEnv.error.format(), null, 2);
+  /**
+   * Throws a clear structural error rather than killing the process tree via process.exit(1).
+   * This guarantees safe compilation boundaries during static site generation (next build)
+   * and prevents complete container crashes in serverless runtime environments.
+   */
+  throw new Error(
+    `❌ CRITICAL: Invalid environment configuration options:\n${errorDetails}`,
+  );
 }
 
-// Export immutable configuration mappings across the operational layer
+/**
+ * Immutable Application Configuration Registry.
+ * Serves as the single source of truth for validated environment configuration properties.
+ * Deep freeze styling applied via 'as const' to guarantee compile-time read-only safety.
+ */
 export const CONFIG = {
   port: parsedEnv.data.PORT,
   databaseUrl: parsedEnv.data.DATABASE_URL,
   env: parsedEnv.data.APP_ENV,
+
+  // High-level environmental semantic markers derived centrally
+  isProduction: parsedEnv.data.APP_ENV === "production",
+  isDevelopment: parsedEnv.data.APP_ENV === "development",
+  isStaging: parsedEnv.data.APP_ENV === "staging",
+  isTest: parsedEnv.data.APP_ENV === "test",
+
   logger: {
     level: parsedEnv.data.LOG_LEVEL,
     sync: parsedEnv.data.LOG_SYNC,
   },
 } as const;
+
+/**
+ * Inferred Global Configuration Type Matrix.
+ * Allows type-safe injections of configuration options across downstream infrastructural modules.
+ */
+export type ConfigType = typeof CONFIG;

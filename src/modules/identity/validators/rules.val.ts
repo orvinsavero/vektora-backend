@@ -1,25 +1,43 @@
 import { z } from "zod";
 import { IDENTITY_LIMITS, REGISTRATION_RULES } from "../identity.constants";
 
-const usernameRegex = /^[a-zA-Z0-9](?:[a-zA-Z0-9_-]*[a-zA-Z0-9])?$/;
-const passwordComplexityRegex =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+/**
+ * Immutable Regular Expression Constraint Matrix.
+ * Frozen via Object.freeze to protect execution definitions from memory-space drift.
+ */
+const REGEX_RULES = Object.freeze({
+  USERNAME: /^[a-zA-Z0-9](?:[a-zA-Z0-9_-]*[a-zA-Z0-9])?$/,
+  PASSWORD_COMPLEXITY:
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
+});
 
 /**
- * Pure utility function to calculate age and verify it meets a minimum floor restriction.
- * Fully decoupled from schemas for flexible use across services, analytics, or guards.
+ * Timezone-Isolated Age Verification Utility.
+ * Evaluates date parts arithmetically to bypass local system clock offsets.
+ * Guarantees consistent validation regardless of host machine timezone.
+ *
+ * @param {string} birthDateString - Input format compliant with YYYY-MM-DD pattern constraints.
+ * @param {number} minAge - Direct target floor integer representing age threshold.
+ * @returns {boolean} True if age meets or exceeds target floor requirement.
  */
 export function isMinimumAge(birthDateString: string, minAge: number): boolean {
-  const birthDate = new Date(birthDateString);
+  // Extract structural parts directly to completely bypass JavaScript UTC/Local offset conversions
+  const parts = birthDateString.split("-");
+  if (parts.length !== 3) return false;
+
+  const birthYear = parseInt(parts[0], 10);
+  const birthMonth = parseInt(parts[1], 10) - 1; // Align 0-indexed month models
+  const birthDay = parseInt(parts[2], 10);
+
   const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth();
+  const currentDay = today.getDate();
 
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDifference = today.getMonth() - birthDate.getMonth();
+  let age = currentYear - birthYear;
+  const monthDifference = currentMonth - birthMonth;
 
-  if (
-    monthDifference < 0 ||
-    (monthDifference === 0 && today.getDate() < birthDate.getDate())
-  ) {
+  if (monthDifference < 0 || (monthDifference === 0 && currentDay < birthDay)) {
     age--;
   }
 
@@ -43,7 +61,7 @@ export const usernameRules = z
     `Username cannot exceed ${IDENTITY_LIMITS.username.max} characters.`,
   )
   .regex(
-    usernameRegex,
+    REGEX_RULES.USERNAME,
     "Username can only contain letters, numbers, underscores, or hyphens, and cannot start or end with a symbol.",
   );
 
@@ -62,7 +80,7 @@ export const passwordRules = z
     `Password configuration cannot exceed ${IDENTITY_LIMITS.password.max} characters.`,
   )
   .regex(
-    passwordComplexityRegex,
+    REGEX_RULES.PASSWORD_COMPLEXITY,
     "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).",
   );
 

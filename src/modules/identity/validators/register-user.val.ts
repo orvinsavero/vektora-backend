@@ -4,9 +4,9 @@ import { IDENTITY_LIMITS } from "../identity.constants";
 import { usernameRules, passwordRules, birthDateRules } from "./rules.val";
 
 /**
- * Request validation schema enforcing business constraints on payload inputs.
- * Normalizes email strings, applies ASCII username rules, checks password complexity,
- * maps split name fields, and checks minimum age limitations.
+ * Inbound Request Validation Contract for User Profiles.
+ * Sanitizes emails, forces character restrictions, rejects empty optional strings,
+ * and executes age calculation validations at the network boundary perimeter.
  */
 export const registerUserSchema = z.object({
   email: z
@@ -15,8 +15,15 @@ export const registerUserSchema = z.object({
     .toLowerCase()
     .email("Invalid email address format.")
     .max(IDENTITY_LIMITS.email.max, "Email path is too long."),
+
   username: usernameRules,
+
   password: passwordRules,
+
+  /**
+   * Transforms empty inputs or pure whitespace sequences into clear null primitives.
+   * This guarantees clean SQL NULL writes rather than empty string pollution.
+   */
   firstName: z
     .string()
     .trim()
@@ -24,7 +31,11 @@ export const registerUserSchema = z.object({
       IDENTITY_LIMITS.firstName.max,
       `First name cannot exceed ${IDENTITY_LIMITS.firstName.max} characters.`,
     )
-    .optional(),
+    .min(1, "First name cannot be empty if provided.")
+    .nullable()
+    .optional()
+    .transform((val) => val || null),
+
   lastName: z
     .string()
     .trim()
@@ -32,8 +43,18 @@ export const registerUserSchema = z.object({
       IDENTITY_LIMITS.lastName.max,
       `Last name cannot exceed ${IDENTITY_LIMITS.lastName.max} characters.`,
     )
-    .optional(),
+    .min(1, "Last name cannot be empty if provided.")
+    .nullable()
+    .optional()
+    .transform((val) => val || null),
+
   birthDate: birthDateRules,
+
+  /**
+   * Optional Profile Asset Hyperlink.
+   * Keeps the value as 'undefined' if omitted from the inbound wire payload buffer.
+   * This allows the persistence layer to cleanly trigger its native column default strings.
+   */
   avatarUrl: z
     .string()
     .trim()
@@ -42,25 +63,37 @@ export const registerUserSchema = z.object({
     .optional(),
 });
 
+/** Inferred Type Representation of the Validated User Registration Payload. */
 export type RegisterUserPayload = z.infer<typeof registerUserSchema>;
 
-/**
- * Static assertion gate ensuring incoming payloads match the database layer schema keys.
- * Omit 'password' and 'birthDate' due to standard string input versus raw database type conversions.
- */
-type VerifiedPayloadKeys = Omit<RegisterUserPayload, "password" | "birthDate">;
-type TargetDatabaseInsertKeys = Omit<
-  typeof users.$inferInsert,
-  | "passwordHash"
-  | "birthDate"
-  | "id"
-  | "currentContext"
-  | "saldoWallet"
-  | "isVerified"
-  | "isActive"
-  | "createdAt"
-  | "updatedAt"
->;
+/** Extract Drizzle's internal database insertion schema model properties */
+type ExtractedInsertModel = typeof users.$inferInsert;
 
-type EnforceDrizzleContract =
-  VerifiedPayloadKeys extends TargetDatabaseInsertKeys ? true : false;
+/**
+ * Reusable Compile-Time Generic Type Constraint Utility.
+ * Forces the TypeScript engine to evaluate whether Type T can be safely assigned to Type U.
+ * Breaks compilation cleanly if structural variations break assignment rules.
+ */
+type AssertExtends<T extends U, U> = true;
+
+/**
+ * Strict Compile-Time Structural Dependency Validation.
+ * Maps incoming validation keys against Drizzle's write layer constraints.
+ * Leverages indexed access lookups to cleanly absorb volatile database driver anomalies.
+ */
+export type EnforceDrizzleContract = AssertExtends<
+  {
+    email: RegisterUserPayload["email"];
+    username: RegisterUserPayload["username"];
+    firstName: RegisterUserPayload["firstName"];
+    lastName: RegisterUserPayload["lastName"];
+    avatarUrl: RegisterUserPayload["avatarUrl"];
+  },
+  {
+    email: ExtractedInsertModel["email"];
+    username: ExtractedInsertModel["username"];
+    firstName: ExtractedInsertModel["firstName"] | null;
+    lastName: ExtractedInsertModel["lastName"] | null;
+    avatarUrl: ExtractedInsertModel["avatarUrl"] | null | undefined;
+  }
+>;

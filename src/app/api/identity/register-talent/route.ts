@@ -1,30 +1,51 @@
 import { NextRequest } from "next/server";
+import { db, dbStorage } from "@/db";
 import { IdentityService } from "@/modules/identity/identity.service";
 import { registerTalentSchema } from "@/modules/identity/validators";
 import { IdentitySerializer } from "@/modules/identity/serializers";
 import { ApiResponse } from "@/shared/utils/response.util";
+import { ValidationError } from "@/shared/errors/app-error"; // Uses your valid native class
 
-export async function POST(req: NextRequest) {
+/**
+ * Endpoint Handler for Talent Profile Conversions.
+ * Intercepts incoming user account contextual upgrades, enforces strict validation bounds,
+ * and executes structural state migrations inside a secure transactional boundary.
+ *
+ * @param {NextRequest} req - Inbound framework request stream proxy.
+ * @returns {Promise<Response>} Structured serialization response envelope.
+ */
+export async function POST(req: NextRequest): Promise<Response> {
   try {
-    // Fallback block guarantees an object structure even if the incoming payload stream is empty
-    const body = await req.json().catch(() => ({}));
+    let body: unknown;
 
-    // Prevent uncaught runtime exceptions by returning parsing states instead of throwing
-    const result = registerTalentSchema.safeParse(body);
-
-    if (!result.success) {
-      // Route validation errors straight to the global handler for structured 400 bad request formatting
-      return ApiResponse.handle(result.error);
+    try {
+      body = await req.json();
+    } catch {
+      /**
+       * Throws a native ValidationError to signal bad JSON payload formatting.
+       * Automatically maps upstream to a clean 400 response code.
+       */
+      throw new ValidationError("Invalid JSON payload formatting.");
     }
 
-    const rawTalent = await IdentityService.registerAsTalent(result.data);
+    const validationResult = registerTalentSchema.safeParse(body);
 
-    // Sanitize database objects at the API boundary to prevent data leak invariant violations
-    const sanitizedTalent = IdentitySerializer.formatTalent(rawTalent);
+    if (!validationResult.success) {
+      return ApiResponse.handle(validationResult.error);
+    }
+
+    const sanitizedTalent = await db.transaction(async (tx) => {
+      return await dbStorage.run(tx, async () => {
+        const rawTalent = await IdentityService.registerAsTalent(
+          validationResult.data,
+          tx,
+        );
+        return IdentitySerializer.formatTalent(rawTalent);
+      });
+    });
 
     return ApiResponse.success(sanitizedTalent, 201);
   } catch (error) {
-    // Intercept lower-level network payload errors or invalid JSON format exceptions
     return ApiResponse.handle(error);
   }
 }

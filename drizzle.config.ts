@@ -1,12 +1,15 @@
 import { defineConfig } from "drizzle-kit";
 import * as dotenv from "dotenv";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("CRITICAL: DATABASE_URL environment variable is missing.");
-}
-
-// Hydrate process environment states from local configuration records prior to executing migration generation passes
+// 1. Hydrate process environment metrics from local disk records first
 dotenv.config({ path: "./.env" });
+
+// 2. Perform defensive boundary assertions now that variables are available
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    "❌ CRITICAL: DATABASE_URL environment variable is missing from the runtime context.",
+  );
+}
 
 export default defineConfig({
   dialect: "postgresql",

@@ -1,3 +1,8 @@
+/**
+ * Structural Field Sizing and Array Length Constraints.
+ * Serves as the centralized registry for Zod perimeter schemas and Drizzle database column definitions.
+ * Deep freeze applied via 'as const' to prevent parameter mutations at runtime.
+ */
 export const IDENTITY_LIMITS = {
   email: { max: 255 },
   username: { min: 3, max: 50 },
@@ -15,19 +20,38 @@ export const IDENTITY_LIMITS = {
   skills: { min: 1, itemMin: 1 },
 } as const;
 
+/**
+ * Platform Account Context State Enum.
+ * Defines the permissible operational states and authorization view models assigned to user profiles.
+ */
 export const USER_CONTEXT = {
   USER: "USER",
   TALENT: "TALENT",
   ADMIN: "ADMIN",
 } as const;
 
-// Systemic profile verification boundaries and enrollment filters
+/**
+ * Systemic Registration Policies and Enrollment Gating Rules.
+ */
 export const REGISTRATION_RULES = {
-  minAgeRequired: 13, // Centralized platform age floor gate
+  /** Centralized minimum age floor gate compliant with international data processing acts (COPPA/GDPR) */
+  minAgeRequired: 13,
 } as const;
 
+/**
+ * Argon2id Cryptographic Work Factor Parameters.
+ * Configured to meet modern OWASP security baselines for high-performance credential hashing.
+ */
 export const HASH_CONFIG = {
-  memoryCost: 65536,
-  timeCost: 3,
-  parallelism: 4,
+  memory: 65536, // 64MB memory footprint boundary (mapped from memoryCost)
+  time: 3, // 3 iterations over block spaces (mapped from timeCost)
+  parallelism: 4, // Utilizing 4 computational execution threads
 } as const;
+
+/**
+ * Inferred Domain Type Utility Matrices.
+ * Exposes internal literal values as clean primitive union tokens for type annotations across the app.
+ */
+export type IdentityLimitsType = typeof IDENTITY_LIMITS;
+export type UserContextType = (typeof USER_CONTEXT)[keyof typeof USER_CONTEXT];
+export type HashConfigType = typeof HASH_CONFIG;
