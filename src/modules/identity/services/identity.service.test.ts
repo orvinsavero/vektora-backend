@@ -3,7 +3,11 @@ import { db, dbStorage } from "@/shared/database/client";
 import { IdentityService } from "./identity.service";
 import { users } from "../identity.schema";
 import { eq } from "drizzle-orm";
-import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
+import {
+  ConflictError,
+  NotFoundError,
+  UnauthorizedError,
+} from "@/shared/errors/app-error"; // Ensure UnauthorizedError is imported
 import { USER_CONTEXT } from "../identity.constants";
 import { RegisterUserPayload, RegisterTalentPayload } from "../request";
 import { Security } from "@/shared/crypto/security";
@@ -22,7 +26,7 @@ describe("IdentityService Integration Tests", () => {
     firstName: "Jane",
     lastName: "Doe",
     birthDate: "1995-06-15",
-    ...overrides, // Notice avatarUrl is omitted to verify schema defaults work cleanly
+    ...overrides,
   });
 
   const createValidTalentPayload = (
@@ -34,7 +38,6 @@ describe("IdentityService Integration Tests", () => {
     ...overrides,
   });
 
-  // Enforces complete isolation by passing the explicit transaction context block down into the test runner
   const runInSandbox = async (testFn: (tx: any) => Promise<void> | void) => {
     try {
       await db.transaction(async (tx) => {
@@ -76,12 +79,10 @@ describe("IdentityService Integration Tests", () => {
         expect(user.isVerified).toBe(false);
         expect(user.isActive).toBe(true);
 
-        // Verifies the database fallback default handles empty inputs elegantly
         expect(user.avatarUrl).toBe(
           "https://storage.vektora.io/avatars/default-placeholder.png",
         );
 
-        // Audit via the isolation parameter reference to avoid fallback connection leakages
         const dbRow = await tx.query.users.findFirst({
           where: eq(users.id, user.id),
         });
@@ -110,10 +111,8 @@ describe("IdentityService Integration Tests", () => {
 
       await runInSandbox(async (tx) => {
         await IdentityService.registerNewUser(firstUser, tx);
-
         const promise = IdentityService.registerNewUser(secondUser, tx);
 
-        // Hardens evaluation checks to ensure the class prototype and status codes are accurate
         await expect(promise).rejects.toThrow(ConflictError);
         await expect(promise).rejects.toThrow(
           "This email address is already registered.",
@@ -133,7 +132,6 @@ describe("IdentityService Integration Tests", () => {
 
       await runInSandbox(async (tx) => {
         await IdentityService.registerNewUser(firstUser, tx);
-
         const promise = IdentityService.registerNewUser(secondUser, tx);
 
         await expect(promise).rejects.toThrow(ConflictError);
@@ -199,7 +197,6 @@ describe("IdentityService Integration Tests", () => {
         const payload = createValidTalentPayload({ userId: user.id });
 
         await IdentityService.registerAsTalent(payload, tx);
-
         const promise = IdentityService.registerAsTalent(payload, tx);
 
         await expect(promise).rejects.toThrow(ConflictError);
@@ -219,20 +216,105 @@ describe("IdentityService Integration Tests", () => {
           tx,
         );
 
-        // Target modifications explicitly through the sandboxed tx context reference
         await tx
           .update(users)
           .set({ isActive: false })
           .where(eq(users.id, user.id));
 
         const payload = createValidTalentPayload({ userId: user.id });
-
         const promise = IdentityService.registerAsTalent(payload, tx);
 
         await expect(promise).rejects.toThrow(ConflictError);
         await expect(promise).rejects.toThrow(
           "Action denied. This user account profile is currently deactivated.",
         );
+      });
+    });
+  });
+
+  describe("authenticateUser", () => {
+    it("should successfully log in a user using their email address with correct credentials", async () => {
+      const registerPayload = createValidUserPayload({
+        email: "auth_email@vektora.io",
+        username: "auth_test_1",
+        password: "ValidPassword123!",
+      });
+
+      await runInSandbox(async (tx) => {
+        await IdentityService.registerNewUser(registerPayload, tx);
+
+        const user = await IdentityService.authenticateUser(
+          {
+            usernameOrEmail: "auth_email@vektora.io",
+            password: "ValidPassword123!",
+          },
+          tx,
+        );
+
+        expect(user).toBeDefined();
+        expect(user.email).toBe(registerPayload.email);
+        expect(user.username).toBe(registerPayload.username);
+      });
+    });
+
+    it("should successfully log in a user using their username with correct credentials", async () => {
+      const registerPayload = createValidUserPayload({
+        email: "auth_username@vektora.io",
+        username: "auth_test_2",
+        password: "ValidPassword123!",
+      });
+
+      await runInSandbox(async (tx) => {
+        await IdentityService.registerNewUser(registerPayload, tx);
+
+        const user = await IdentityService.authenticateUser(
+          {
+            usernameOrEmail: "auth_test_2",
+            password: "ValidPassword123!",
+          },
+          tx,
+        );
+
+        expect(user).toBeDefined();
+        expect(user.username).toBe(registerPayload.username);
+      });
+    });
+
+    it("should throw an UnauthorizedError if the provided username or email does not exist", async () => {
+      await runInSandbox(async (tx) => {
+        const promise = IdentityService.authenticateUser(
+          {
+            usernameOrEmail: "ghost_user",
+            password: "SomePassword123!",
+          },
+          tx,
+        );
+
+        await expect(promise).rejects.toThrow(UnauthorizedError);
+        await expect(promise).rejects.toThrow("Invalid credentials provided.");
+      });
+    });
+
+    it("should throw an UnauthorizedError if the credentials contain an invalid password string", async () => {
+      const registerPayload = createValidUserPayload({
+        email: "wrong_password@vektora.io",
+        username: "auth_test_3",
+        password: "CorrectPassword123!",
+      });
+
+      await runInSandbox(async (tx) => {
+        await IdentityService.registerNewUser(registerPayload, tx);
+
+        const promise = IdentityService.authenticateUser(
+          {
+            usernameOrEmail: "auth_test_3",
+            password: "WrongPassword123!",
+          },
+          tx,
+        );
+
+        await expect(promise).rejects.toThrow(UnauthorizedError);
+        await expect(promise).rejects.toThrow("Invalid credentials provided.");
       });
     });
   });

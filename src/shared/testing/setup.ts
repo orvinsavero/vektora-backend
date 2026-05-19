@@ -1,5 +1,5 @@
 import { afterAll } from "vitest";
-import { pgClient } from "@/db";
+import { pgClient } from "../database/client";
 import { logger } from "@/shared/telemetry/logger";
 
 afterAll(async () => {
