@@ -5,6 +5,8 @@ import { requestStorage } from "./request-context.util";
 
 type VectorHandler = (req: NextRequest) => Promise<Response> | Response;
 
+const isProduction = process.env.NODE_ENV === "production";
+
 /**
  * Higher-Order Centralized Route Interceptor for Next.js App Router.
  * Hydrates standard AsyncLocalStorage tracking metrics and unifies request/response telemetry logs.
@@ -30,7 +32,33 @@ export function traceRoute(handler: VectorHandler): VectorHandler {
         logContext.hasAuth = true;
       }
 
+      // 1. Inbound trace log (Standard Metadata)
       logger.info(logContext, `--> INBOUND_REQUEST`);
+
+      // 2. SAFE DEVELOPMENT PAYLOAD LOGGING
+      // Only execute body parsing and logging outside of production environments
+      if (!isProduction && ["POST", "PUT", "PATCH"].includes(method)) {
+        try {
+          // Clone the request stream so we don't consume the body buffer permanently
+          const clonedReq = req.clone();
+          const body = await clonedReq.json();
+
+          // Create a copy of the payload to sanitize highly confidential keys
+          const sanitizedBody = { ...body };
+          if (sanitizedBody.password)
+            sanitizedBody.password = "[REDACTED_SENSITIVE_CREDENTIAL]";
+          if (sanitizedBody.passwordConfirmation)
+            sanitizedBody.passwordConfirmation =
+              "[REDACTED_SENSITIVE_CREDENTIAL]";
+
+          logger.debug(
+            { requestId, payload: sanitizedBody },
+            `DEBUG_PAYLOAD: Inbound data context mapped for testing`,
+          );
+        } catch {
+          // Fallback silently if the inbound body is not JSON or empty
+        }
+      }
 
       try {
         const response = await handler(req);
