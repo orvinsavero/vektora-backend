@@ -32,18 +32,15 @@ export function traceRoute(handler: VectorHandler): VectorHandler {
         logContext.hasAuth = true;
       }
 
-      // 1. Inbound trace log (Standard Metadata)
+      // 1. Log Inbound Metadata
       logger.info(logContext, `--> INBOUND_REQUEST`);
 
-      // 2. SAFE DEVELOPMENT PAYLOAD LOGGING
-      // Only execute body parsing and logging outside of production environments
+      // 2. Log Inbound Payload (Development Only)
       if (!isProduction && ["POST", "PUT", "PATCH"].includes(method)) {
         try {
-          // Clone the request stream so we don't consume the body buffer permanently
           const clonedReq = req.clone();
           const body = await clonedReq.json();
 
-          // Create a copy of the payload to sanitize highly confidential keys
           const sanitizedBody = { ...body };
           if (sanitizedBody.password)
             sanitizedBody.password = "[REDACTED_SENSITIVE_CREDENTIAL]";
@@ -56,7 +53,7 @@ export function traceRoute(handler: VectorHandler): VectorHandler {
             `DEBUG_PAYLOAD: Inbound data context mapped for testing`,
           );
         } catch {
-          // Fallback silently if the inbound body is not JSON or empty
+          // Fallback silently if request body is empty or non-JSON
         }
       }
 
@@ -66,6 +63,23 @@ export function traceRoute(handler: VectorHandler): VectorHandler {
           (performance.now() - startTime).toFixed(2),
         );
 
+        // 3. Log Outbound Payload (Development Only)
+        if (!isProduction) {
+          try {
+            // Clone the response stream so the client can still read the original buffer cleanly
+            const clonedRes = response.clone();
+            const resBody = await clonedRes.json();
+
+            logger.debug(
+              { requestId, payload: resBody },
+              `DEBUG_PAYLOAD: Outbound response context mapped for testing`,
+            );
+          } catch {
+            // Fallback silently if response body is empty or non-JSON
+          }
+        }
+
+        // 4. Log Outbound Metadata
         logger.info(
           { requestId, method, url, statusCode: response.status, durationMs },
           `<-- OUTBOUND_RESPONSE`,
