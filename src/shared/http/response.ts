@@ -121,6 +121,20 @@ export class ApiResponse {
     fallbackResponse.headers.set("x-request-id", requestId);
     return fallbackResponse;
   }
+  static handleErrorResponse(
+    message: string,
+    statusCode: number,
+  ): NextResponse<ApiResponseEnvelope<null>> {
+    return NextResponse.json(
+      {
+        success: false,
+        data: null,
+        error: { message },
+        timestamp: new Date().toISOString(),
+      },
+      { status: statusCode },
+    );
+  }
 }
 
 export class CookieManager {

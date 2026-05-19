@@ -3,13 +3,10 @@ import { IDENTITY_LIMITS } from "../identity.constants";
 import { z } from "zod";
 
 /**
- * Inbound Request Validation Contract for Talent Upgrades.
- * Enforces field data types, string trimming, array limits, and item uniqueness
- * at the network perimeter prior to service execution layers.
+ * Inbound Network Request Validation Contract for Talent Upgrades.
+ * Body payload strictly validates business parameters; identity is pulled from session tokens.
  */
 export const registerTalentSchema = z.object({
-  userId: z.string().uuid("Invalid user ID format. Must be a valid UUID."),
-
   bio: z
     .string()
     .max(
@@ -20,7 +17,6 @@ export const registerTalentSchema = z.object({
 
   /**
    * Validates array bounds and filters duplicates out of the incoming stream.
-   * Leverages a preprocessing transform layer to maintain distinct data entries.
    */
   skills: z
     .array(
@@ -36,23 +32,26 @@ export const registerTalentSchema = z.object({
     .transform((items) => [...new Set(items)]), // Strips duplicate skill arrays at the boundary
 });
 
-/** Inferred Type Representation of the Validated Talent Schema Payload. */
-export type RegisterTalentPayload = z.infer<typeof registerTalentSchema>;
+/** Inferred Type Representation of the Validated Network Wire Payload. */
+export type RegisterTalentNetworkInput = z.infer<typeof registerTalentSchema>;
+
+/** * Expanded Business Context Interface.
+ * Combines the validated client body with the authenticated session context.
+ * This is what gets passed directly into IdentityService.registerAsTalent().
+ */
+export interface RegisterTalentPayload extends RegisterTalentNetworkInput {
+  userId: string;
+}
 
 /** Extract Drizzle's internal database insertion schema model properties */
 type ExtractedInsertModel = typeof talents.$inferInsert;
 
-/**
- * Reusable Compile-Time Generic Type Constraint Utility.
- * Forces the TypeScript engine to evaluate whether Type T can be safely assigned to Type U.
- * Breaks compilation cleanly if structural variations break assignment rules.
- */
+/** Reusable Compile-Time Generic Type Constraint Utility */
 type AssertExtends<T extends U, U> = true;
 
 /**
  * Strict Compile-Time Structural Dependency Validation.
- * Maps incoming validation keys against Drizzle's write layer constraints.
- * Leverages indexed access lookups to eliminate dead variable declarations and satisfy strict linters.
+ * Confirms our combined application input safely matches what Drizzle demands for database operations.
  */
 type EnforceDrizzleContract = AssertExtends<
   {

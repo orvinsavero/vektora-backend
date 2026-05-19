@@ -1,26 +1,33 @@
-import { NextRequest } from "next/server";
 import { IdentityService } from "../services/identity.service";
 import { registerTalentSchema } from "../request/register-talent.dto";
 import { IdentitySerializer } from "../response/user.response";
 import { ApiResponse } from "@/shared/http/response";
+import { AuthenticatedNextRequest } from "@/shared/interceptors/auth-guard";
 
 /**
  * Core Controller Handler for Talent Profile Conversions.
- * Extracts, validates, and orchestrates data mapping at the identity module boundary.
+ * Protected Boundary Endpoint handler consuming ambient verified request context profiles.
  */
 export async function registerTalentController(
-  req: NextRequest,
+  req: AuthenticatedNextRequest,
 ): Promise<Response> {
+  // This 'Response' refers safely to the global Web API type definition
   try {
     const body = await req.json();
 
-    // Validate request constraints at the boundary perimeter
+    // 1. Validate incoming business parameters (bio, skills) at the wire boundary
     const validatedData = registerTalentSchema.parse(body);
 
-    // Delegate processing down to the service layer (internal transaction handled inside service)
-    const rawTalent = await IdentityService.registerAsTalent(validatedData);
+    // 2. Securely pull the authenticated user identity injected by the auth guard interceptor
+    const targetUserId = req.user.id;
 
-    // Apply exact data translation formatting rules to strip internal database symbols
+    // 3. Delegate execution down to the service combining token identity and body assets
+    const rawTalent = await IdentityService.registerAsTalent({
+      userId: targetUserId,
+      ...validatedData,
+    });
+
+    // 4. Apply exact data translation formatting rules to hide system symbols
     const serializedTalent = IdentitySerializer.formatTalent(rawTalent);
 
     return ApiResponse.success(serializedTalent, 201);
