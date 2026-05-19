@@ -12,7 +12,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    setupFiles: ["./src/test/setup.ts"],
+    setupFiles: ["./src/shared/testing/setup.ts"],
     include: ["src/**/*.test.ts"],
     // Removed the manual 'env' block layout since process.env is already natively hydrated globally
   },

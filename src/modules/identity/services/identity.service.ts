@@ -1,4 +1,4 @@
-import { db, DbClient, DbTransaction } from "@/db";
+import { db, DbClient, DbTransaction } from "@/shared/database/client";
 import { users, talents } from "../identity.schema";
 import { or, eq, sql } from "drizzle-orm";
 import { USER_CONTEXT } from "../identity.constants";

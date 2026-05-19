@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { db, dbStorage } from "@/db";
+import { db, dbStorage } from "@/shared/database/client";
 import { IdentityService } from "./identity.service";
 import { users } from "../identity.schema";
 import { eq } from "drizzle-orm";
