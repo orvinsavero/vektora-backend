@@ -1,5 +1,5 @@
 import { talents } from "../catalog.schema";
-import { IDENTITY_LIMITS } from "../../identity/identity.constants";
+import { CATALOG_LIMITS } from "../catalog.constants";
 import { z } from "zod";
 
 /**
@@ -9,27 +9,35 @@ import { z } from "zod";
 export const registerTalentSchema = z.object({
   bio: z
     .string()
+    .trim()
+    .min(CATALOG_LIMITS.bio.min, "Biography statement cannot be empty.")
     .max(
-      IDENTITY_LIMITS.bio.max,
-      `Bio cannot exceed ${IDENTITY_LIMITS.bio.max} characters.`,
-    )
-    .optional(),
+      CATALOG_LIMITS.bio.max,
+      `Biography cannot exceed ${CATALOG_LIMITS.bio.max} characters.`,
+    ),
 
-  /**
-   * Validates array bounds and filters duplicates out of the incoming stream.
-   */
   skills: z
     .array(
       z
         .string()
         .trim()
-        .min(IDENTITY_LIMITS.skills.itemMin, "Skill name cannot be empty."),
+        .min(
+          CATALOG_LIMITS.skills.itemMin,
+          `Each skill tag must be at least ${CATALOG_LIMITS.skills.itemMin} characters.`,
+        )
+        .max(
+          CATALOG_LIMITS.skills.itemMax,
+          `Each skill tag cannot exceed ${CATALOG_LIMITS.skills.itemMax} characters.`,
+        ),
     )
     .min(
-      IDENTITY_LIMITS.skills.min,
-      `At least ${IDENTITY_LIMITS.skills.min} skill is required.`,
+      CATALOG_LIMITS.skills.min,
+      `Provide at least ${CATALOG_LIMITS.skills.min} professional skill tag.`,
     )
-    .transform((items) => [...new Set(items)]), // Strips duplicate skill arrays at the boundary
+    .max(
+      CATALOG_LIMITS.skills.max,
+      `Maximum skill capacity capped at ${CATALOG_LIMITS.skills.max} tags.`,
+    ),
 });
 
 /** Inferred Type Representation of the Validated Network Wire Payload. */

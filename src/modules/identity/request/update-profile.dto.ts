@@ -42,19 +42,28 @@ export const updateProfileSchema = z.object({
   language: z
     .string()
     .trim()
-    .max(10, "Language identifier code is too long.")
+    .max(
+      IDENTITY_LIMITS.language.max,
+      `Language identifier code cannot exceed ${IDENTITY_LIMITS.language.max} characters.`,
+    )
     .optional(),
 
   theme: z
     .string()
     .trim()
-    .max(20, "Theme identifier state name is too long.")
+    .max(
+      IDENTITY_LIMITS.theme.max,
+      `Theme identifier state name cannot exceed ${IDENTITY_LIMITS.theme.max} characters.`,
+    )
     .optional(),
 
   timezone: z
     .string()
     .trim()
-    .max(50, "Timezone region identifier path is too long.")
+    .max(
+      IDENTITY_LIMITS.timezone.max,
+      `Timezone region identifier path cannot exceed ${IDENTITY_LIMITS.timezone.max} characters.`,
+    )
     .optional(),
 });
 

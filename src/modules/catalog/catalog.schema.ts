@@ -8,6 +8,7 @@ import {
   boolean,
 } from "drizzle-orm/pg-core";
 import { users } from "../identity/identity.schema";
+import { CATALOG_LIMITS } from "./catalog.constants";
 
 export const catalogSchema = pgSchema("catalog");
 
@@ -26,8 +27,7 @@ export const talents = catalogSchema.table("talents", {
     .unique()
     .references(() => users.id, { onDelete: "cascade" }),
 
-  bio: varchar("bio", { length: 1000 }), // Bound to future catalog limit constants
-
+  bio: varchar("bio", { length: CATALOG_LIMITS.bio.max }),
   skills: varchar("skills").array().notNull().default([]),
   isVerified: boolean("is_verified").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
