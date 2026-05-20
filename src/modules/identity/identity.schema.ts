@@ -46,42 +46,41 @@ export const identitySchema = pgSchema("identity");
  */
 export const users = identitySchema.table("users", {
   id: uuid("id").primaryKey().defaultRandom(),
-
   email: varchar("email", { length: IDENTITY_LIMITS.email.max })
     .notNull()
     .unique(),
-
   username: varchar("username", { length: IDENTITY_LIMITS.username.max })
     .notNull()
     .unique(),
-
   passwordHash: varchar("password_hash", {
     length: IDENTITY_LIMITS.password.hash.max,
   }).notNull(),
-
   firstName: varchar("first_name", { length: IDENTITY_LIMITS.firstName.max }),
-
   lastName: varchar("last_name", { length: IDENTITY_LIMITS.lastName.max }),
-
   birthDate: pgDateString("birth_date").notNull(),
-
   avatarUrl: varchar("avatar_url", { length: IDENTITY_LIMITS.avatarUrl.max })
     .notNull()
     .default("https://storage.vektora.io/avatars/default-placeholder.png"),
-
-  currentContext: varchar("current_context", {
-    length: IDENTITY_LIMITS.currentContext.max,
-  })
-    .notNull()
-    .default(USER_CONTEXT.USER), // Uses the frozen constant instead of a hardcoded string literal
-
   saldoWallet: numeric("saldo_wallet", {
     precision: IDENTITY_LIMITS.saldoWallet.precision,
     scale: IDENTITY_LIMITS.saldoWallet.scale,
   })
     .notNull()
     .default("0.00"),
-
+  currentContext: varchar("current_context", {
+    length: IDENTITY_LIMITS.currentContext.max,
+  })
+    .notNull()
+    .default(USER_CONTEXT.USER), // Uses the frozen constant instead of a hardcoded string literal
+  language: varchar("language", { length: IDENTITY_LIMITS.language.max })
+    .notNull()
+    .default(IDENTITY_LIMITS.language.default),
+  theme: varchar("theme", { length: IDENTITY_LIMITS.theme.max })
+    .notNull()
+    .default(IDENTITY_LIMITS.theme.default),
+  timezone: varchar("timezone", { length: IDENTITY_LIMITS.timezone.max })
+    .notNull()
+    .default(IDENTITY_LIMITS.timezone.default),
   isVerified: boolean("is_verified").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),

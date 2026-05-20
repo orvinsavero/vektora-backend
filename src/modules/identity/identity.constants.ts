@@ -1,4 +1,4 @@
-import { CONFIG } from "@/config/env.config";
+import { UpdateProfilePayload } from "./request/update-profile.dto";
 /**
  * Structural Field Sizing and Array Length Constraints.
  * Serves as the centralized registry for Zod perimeter schemas and Drizzle database column definitions.
@@ -19,6 +19,9 @@ export const IDENTITY_LIMITS = {
   bio: { max: 1000 },
   saldoWallet: { precision: 12, scale: 2 },
   skills: { min: 1, itemMin: 1 },
+  language: { max: 10, default: "en" },
+  theme: { max: 20, default: "system" },
+  timezone: { max: 50, default: "UTC" },
 } as const;
 
 /**
@@ -63,6 +66,17 @@ export const AUTH_COOKIE_CONFIG = {
   },
 } as const;
 
+/** Whitelisted database column parameters permitted to be altered via unprivileged client requests */
+export const ALLOWED_PROFILE_UPDATE_KEYS: (keyof UpdateProfilePayload)[] = [
+  "firstName",
+  "lastName",
+  "birthDate",
+  "avatarUrl",
+  "language",
+  "theme",
+  "timezone",
+];
+
 /**
  * Inferred Domain Type Utility Matrices.
  * Exposes internal literal values as clean primitive union tokens for type annotations across the app.
@@ -71,3 +85,4 @@ export type IdentityLimitsType = typeof IDENTITY_LIMITS;
 export type UserContextType = (typeof USER_CONTEXT)[keyof typeof USER_CONTEXT];
 export type HashConfigType = typeof HASH_CONFIG;
 export type AuthCookieConfigType = typeof AUTH_COOKIE_CONFIG;
+export type AllowedProfileUpdateKeysType = typeof ALLOWED_PROFILE_UPDATE_KEYS;

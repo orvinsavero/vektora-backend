@@ -1,11 +1,21 @@
-import { db, DbClient, DbTransaction } from "@/shared/database/client";
-import { users, talents } from "../identity.schema";
 import { or, eq, sql } from "drizzle-orm";
-import { USER_CONTEXT } from "../identity.constants";
-import { RegisterUserPayload } from "../request";
-import { UnauthorizedError, ConflictError } from "@/shared/errors/app-error";
+import { db, DbClient, DbTransaction } from "@/shared/database/client";
+import {
+  UnauthorizedError,
+  ConflictError,
+  NotFoundError,
+} from "@/shared/errors/app-error";
 import { Security } from "@/shared/crypto/security";
-import type { LoginPayload } from "../request/login.dto";
+import {
+  RegisterUserPayload,
+  UpdateProfilePayload,
+  LoginPayload,
+} from "../request";
+import { users } from "../identity.schema";
+import {
+  USER_CONTEXT,
+  ALLOWED_PROFILE_UPDATE_KEYS,
+} from "../identity.constants";
 
 type UserRow = typeof users.$inferSelect;
 
@@ -108,5 +118,83 @@ export class IdentityService {
     }
 
     return user;
+  }
+
+  /**
+   * Resolves an active user profile entity via its primary unique ID.
+   * @param targetUserId The unique UUID of the user to look up.
+   * @param client The database client instance (defaults to global pool).
+   * @throws {NotFoundError} If the targeted user record does not exist.
+   */
+  static async getUserProfileById(
+    targetUserId: string,
+    client: DbClient | DbTransaction = db,
+  ): Promise<UserRow> {
+    const [user] = await client
+      .select()
+      .from(users)
+      .where(eq(users.id, targetUserId))
+      .limit(1);
+
+    if (!user) {
+      throw new NotFoundError("Requested user account profile does not exist.");
+    }
+
+    return user;
+  }
+
+  /**
+   * Dynamically mutates an existing user profile's allowable metadata parameters.
+   * Automatically strips undefined keys to protect against partial data loss.
+   * @param {string} userId - Target unique identification tracking handle.
+   * @param {UpdateProfilePayload} payload - Filtered update fields whitelisted from the API boundary.
+   * @param {DbClient | DbTransaction} client - Execution database link context.
+   * @returns {Promise<UserRow>} Enriched database mutation row outcome.
+   * @throws {NotFoundError} If the targeted user record is non-existent.
+   */
+  static async updateUserProfile(
+    userId: string,
+    payload: UpdateProfilePayload,
+    client: DbClient | DbTransaction = db,
+  ): Promise<UserRow> {
+    // Explicit extraction matching our approved client-side metadata whitelist
+    const updateData = ALLOWED_PROFILE_UPDATE_KEYS.reduce(
+      (acc, key) => {
+        if (payload[key] !== undefined) {
+          acc[key] = payload[key] as any;
+        }
+        return acc;
+      },
+      {} as Record<string, any>,
+    );
+
+    // Short-circuit operational execution if caller submits an empty JSON container
+    if (Object.keys(updateData).length === 0) {
+      const [existingUser] = await client
+        .select()
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (!existingUser) {
+        throw new NotFoundError("Target user profile does not exist.");
+      }
+      return existingUser;
+    }
+
+    // Force system control over audit tracks
+    updateData.updatedAt = sql`now()`;
+
+    const [updatedUser] = await client
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updatedUser) {
+      throw new NotFoundError("Target user profile does not exist.");
+    }
+
+    return updatedUser;
   }
 }

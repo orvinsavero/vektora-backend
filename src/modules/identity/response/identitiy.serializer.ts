@@ -1,4 +1,4 @@
-import { users, talents } from "../identity.schema";
+import { users } from "../identity.schema";
 
 /** Structural API contract definitions mapping outbound network response shapes explicitly */
 export interface SerializedUserResponse {
@@ -36,8 +36,23 @@ export interface SerializedAuthResponse {
   currentContext: "USER" | "TALENT" | string;
 }
 
+/** Strict outbound wire payload contract definition for self-service personal identity lookups */
+export interface SerializedUserProfileResponse {
+  id: string;
+  email: string;
+  username: string;
+  firstName: string | null;
+  lastName: string | null;
+  birthDate: string;
+  avatarUrl: string | null;
+  currentContext: string;
+  saldoWallet: number;
+  isVerified: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 type UserRow = typeof users.$inferSelect;
-type TalentRow = typeof talents.$inferSelect;
 
 /**
  * Data Transformation and Serialization Layer.
@@ -48,7 +63,7 @@ export class IdentitySerializer {
   /**
    * Sanitizes and maps database user records into standardized data schemas.
    * Explicitly drops system internals such as password hashes from outbound visibility.
-   * * @param {UserRow} user - Source internal database selection schema row.
+   * @param {UserRow} user - Source internal database selection schema row.
    * @returns {SerializedUserResponse} Transformed public data contract representation.
    */
   static formatUser(user: UserRow): SerializedUserResponse {
@@ -72,27 +87,10 @@ export class IdentitySerializer {
   }
 
   /**
-   * Sanitizes and transforms structural database talent profile entities into public contracts.
-   * * @param {TalentRow} talent - Source internal database talent profile row.
-   * @returns {SerializedTalentResponse} Transformed public data contract representation.
-   */
-  static formatTalent(talent: TalentRow): SerializedTalentResponse {
-    return {
-      id: talent.id,
-      userId: talent.userId,
-      bio: talent.bio ?? null,
-      skills: Array.isArray(talent.skills) ? (talent.skills as string[]) : [],
-      isVerified: talent.isVerified,
-      createdAt: (talent.createdAt ?? new Date()).toISOString(),
-      updatedAt: (talent.updatedAt ?? new Date()).toISOString(),
-    };
-  }
-
-  /**
    * Trims down raw database records into a lean, optimized object
    * specifically built to bootstrap the client-side UI upon authentication.
    * Eliminates system metadata, balances, and timestamps to optimize wire size.
-   * * @param {UserRow} user - Source internal database selection schema row.
+   * @param {UserRow} user - Source internal database selection schema row.
    * @returns {SerializedAuthResponse} Hardened UI hydration wire profile.
    */
   static formatAuthResponse(user: UserRow): SerializedAuthResponse {
@@ -104,6 +102,29 @@ export class IdentitySerializer {
         user.username,
       avatarUrl: user.avatarUrl ?? null,
       currentContext: user.currentContext,
+    };
+  }
+
+  /**
+   * Transmutes raw relational database records into an unprivileged personal account overview.
+   * Enforces rigorous data sanitization loops and casts structural balance constraints securely.
+   * @param {UserRow} user - Source internal database selection schema row.
+   * @returns {SerializedUserProfileResponse} Sanitized personal identity overview contract.
+   */
+  static formatUserProfile(user: UserRow): SerializedUserProfileResponse {
+    return {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      firstName: user.firstName ?? null,
+      lastName: user.lastName ?? null,
+      birthDate: user.birthDate,
+      avatarUrl: user.avatarUrl,
+      currentContext: user.currentContext,
+      saldoWallet: Number(user.saldoWallet || 0), // Explicit protection against numeric database string mappings
+      isVerified: user.isVerified,
+      createdAt: (user.createdAt ?? new Date()).toISOString(),
+      updatedAt: (user.updatedAt ?? new Date()).toISOString(),
     };
   }
 }

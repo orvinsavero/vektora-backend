@@ -63,4 +63,24 @@ export const API_ROUTES: RouteDefinition[] = [
     isProtected: false,
     requestBody: loginSchema, // Import this schema at the top of the file
   },
+  {
+    method: "GET",
+    version: "v1",
+    module: "Identity",
+    path: "/api/identity/profile",
+    summary: "Retrieve personal user profile parameters",
+    description:
+      "Extracts identity metadata details via active cryptographically signed session variables.",
+    isProtected: true,
+  },
+  {
+    method: "PATCH",
+    version: "v1",
+    module: "Identity",
+    path: "/api/identity/profile",
+    summary: "Update personal user profile parameters",
+    description:
+      "Accepts partial optional frontend configurations and metadata variables, completely blocking system state overrides.",
+    isProtected: true,
+  },
 ];

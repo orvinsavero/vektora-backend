@@ -46,9 +46,11 @@ export class CatalogService {
     }
 
     // 3. Prevent duplicate store initialization attempts
-    const existingTalent = await client.query.talents.findFirst({
-      where: eq(talents.userId, userId),
-    });
+    const [existingTalent] = await client
+      .select()
+      .from(talents)
+      .where(eq(talents.userId, userId))
+      .limit(1);
 
     if (existingTalent) {
       throw new ConflictError("This user is already registered as a talent.");

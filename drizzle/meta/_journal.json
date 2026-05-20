@@ -8,6 +8,13 @@
       "when": 1779289770010,
       "tag": "0000_special_clint_barton",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779298590275,
+      "tag": "0001_chilly_black_panther",
+      "breakpoints": true
     }
   ]
 }

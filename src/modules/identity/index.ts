@@ -7,3 +7,5 @@ export * from "./response";
 
 export { loginController } from "./controllers/login";
 export { registerUserController } from "./controllers/register-user";
+export { getUserProfileController } from "./controllers/get-profile";
+export { updateProfileController } from "./controllers/update-profile";

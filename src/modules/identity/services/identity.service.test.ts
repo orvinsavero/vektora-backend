@@ -164,4 +164,69 @@ describe("IdentityService Integration Tests", () => {
       ).rejects.toThrow(UnauthorizedError);
     });
   });
+
+  describe("getUserProfileById", () => {
+    it("should successfully return a user profile row when matching a valid user ID", async () => {
+      // 1. Setup a fresh dummy user record using your existing data factory
+      const payload = createValidUserPayload();
+      const user = await IdentityService.registerNewUser(payload, db);
+
+      // 2. Execute lookups against the newly generated primary key handle
+      const resolvedProfile = await IdentityService.getUserProfileById(
+        user.id,
+        db,
+      );
+
+      // 3. Confirm database fields are intact
+      expect(resolvedProfile).toBeDefined();
+      expect(resolvedProfile.id).toBe(user.id);
+      expect(resolvedProfile.email).toBe(payload.email);
+      expect(resolvedProfile.username).toBe(payload.username);
+    });
+
+    it("should throw a NotFoundError if the requested user ID is missing from the database", async () => {
+      const nonExistentId = crypto.randomUUID();
+
+      await expect(
+        IdentityService.getUserProfileById(nonExistentId, db),
+      ).rejects.toThrow("Requested user account profile does not exist.");
+    });
+  });
+
+  describe("updateUserProfile", () => {
+    it("should successfully apply partial profile preference updates while preserving untouched columns", async () => {
+      const payload = createValidUserPayload({
+        firstName: "Static",
+        lastName: "Preserved",
+      });
+      const user = await IdentityService.registerNewUser(payload, db);
+
+      // Mutate only frontend preference keys and a single metadata column
+      const updatedProfile = await IdentityService.updateUserProfile(
+        user.id,
+        {
+          firstName: "Altered",
+          theme: "dark",
+          language: "id",
+        },
+        db,
+      );
+
+      expect(updatedProfile).toBeDefined();
+      expect(updatedProfile.id).toBe(user.id);
+      expect(updatedProfile.firstName).toBe("Altered");
+      expect(updatedProfile.theme).toBe("dark");
+      expect(updatedProfile.language).toBe("id");
+      expect(updatedProfile.lastName).toBe("Preserved"); // Remained completely unaffected
+      expect(updatedProfile.timezone).toBe("UTC"); // Remained on system default parameter
+    });
+
+    it("should throw an operational NotFoundError instance if target UUID key is missing from storage", async () => {
+      const missingId = crypto.randomUUID();
+
+      await expect(
+        IdentityService.updateUserProfile(missingId, { theme: "light" }, db),
+      ).rejects.toThrow("Target user profile does not exist.");
+    });
+  });
 });
