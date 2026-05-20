@@ -50,6 +50,9 @@ export interface SerializedUserProfileResponse {
   isVerified: boolean;
   createdAt: string;
   updatedAt: string;
+  language: string;
+  theme: string;
+  timezone: string;
 }
 
 type UserRow = typeof users.$inferSelect;
@@ -123,6 +126,9 @@ export class IdentitySerializer {
       currentContext: user.currentContext,
       saldoWallet: Number(user.saldoWallet || 0), // Explicit protection against numeric database string mappings
       isVerified: user.isVerified,
+      language: user.language,
+      theme: user.theme,
+      timezone: user.timezone,
       createdAt: (user.createdAt ?? new Date()).toISOString(),
       updatedAt: (user.updatedAt ?? new Date()).toISOString(),
     };
