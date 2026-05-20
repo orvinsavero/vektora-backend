@@ -2,18 +2,12 @@ import { db, DbClient, DbTransaction } from "@/shared/database/client";
 import { users, talents } from "../identity.schema";
 import { or, eq, sql } from "drizzle-orm";
 import { USER_CONTEXT } from "../identity.constants";
-import { RegisterUserPayload, RegisterTalentPayload } from "../request";
-import {
-  UnauthorizedError,
-  ConflictError,
-  NotFoundError,
-} from "@/shared/errors/app-error";
+import { RegisterUserPayload } from "../request";
+import { UnauthorizedError, ConflictError } from "@/shared/errors/app-error";
 import { Security } from "@/shared/crypto/security";
-import { logger } from "@/shared/telemetry/logger";
 import type { LoginPayload } from "../request/login.dto";
 
 type UserRow = typeof users.$inferSelect;
-type TalentRow = typeof talents.$inferSelect;
 
 /**
  * Identity Domain Core Service Engine.
@@ -69,76 +63,6 @@ export class IdentityService {
       .returning();
 
     return newUser;
-  }
-
-  /**
-   * Converts an active, existing user profile into a marketplace talent account matrix.
-   * Executes multi-table adjustments inside the provided relational context.
-   * * @param {RegisterTalentPayload} payload - Validated profile configuration values.
-   * @param {DbClient | DbTransaction} [client=db] - Optional execution context to safeguard atomic write pools.
-   * @returns {Promise<TalentRow>} Newly materialized structural database talent selection record.
-   * @throws {NotFoundError} If the underlying userId is missing from the system.
-   * @throws {ConflictError} If the targeted user profile is deactivated or already holds talent credentials.
-   */
-  static async registerAsTalent(
-    payload: RegisterTalentPayload,
-    client: DbClient | DbTransaction = db,
-  ): Promise<TalentRow> {
-    const { userId } = payload;
-
-    // 1. Verify that the parent user node profile actually exists
-    const userRow = await client.query.users.findFirst({
-      where: eq(users.id, userId),
-    });
-
-    if (!userRow) {
-      throw new NotFoundError("Target user profile does not exist.");
-    }
-
-    // 2. Prevent account elevations for blocked or suspended profiles
-    if (!userRow.isActive) {
-      throw new ConflictError(
-        "Action denied. This user account profile is currently deactivated.",
-      );
-    }
-
-    // 3. Prevent duplicate account initialization attempts
-    const existingTalent = await client.query.talents.findFirst({
-      where: eq(talents.userId, userId),
-    });
-
-    if (existingTalent) {
-      throw new ConflictError("This user is already registered as a talent.");
-    }
-
-    try {
-      // 4. Materialize talent profile specifications
-      const [newTalent] = await client
-        .insert(talents)
-        .values({
-          userId: userId,
-          bio: payload.bio,
-          skills: payload.skills,
-        })
-        .returning();
-
-      // 5. Update user contextual flags to align application state mapping rules
-      await client
-        .update(users)
-        .set({
-          currentContext: USER_CONTEXT.TALENT,
-          updatedAt: sql`now()`,
-        })
-        .where(eq(users.id, userId));
-
-      return newTalent;
-    } catch (error) {
-      logger.error(
-        { userId, err: error },
-        "DATABASE WRITE FAULT: Operational failure inside registerAsTalent database write execution stream pipeline.",
-      );
-      throw error;
-    }
   }
 
   /**

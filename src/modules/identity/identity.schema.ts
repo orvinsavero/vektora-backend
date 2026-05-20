@@ -87,28 +87,3 @@ export const users = identitySchema.table("users", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
-
-/**
- * Secondary Extended Talent Profile Persistence Entity.
- * Maps operational capability descriptors via a strict 1:1 relation back to the root User account.
- */
-export const talents = identitySchema.table("talents", {
-  id: uuid("id").primaryKey().defaultRandom(),
-
-  /**
-   * Unique foreign key reference enforces the strict 1:1 structural cardinality bond.
-   * Declaring unique() automatically deploys a underlying unique B-Tree index in PostgreSQL,
-   * rendering manual explicit layout indices redundant.
-   */
-  userId: uuid("user_id")
-    .notNull()
-    .unique()
-    .references(() => users.id, { onDelete: "cascade" }),
-
-  bio: varchar("bio", { length: IDENTITY_LIMITS.bio.max }),
-
-  skills: varchar("skills").array().notNull().default([]),
-  isVerified: boolean("is_verified").notNull().default(false),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { IdentityService } from "../services/identity.service";
 import { registerUserSchema } from "../request/register-user.dto";
-import { IdentitySerializer } from "../response/user.response";
+import { IdentitySerializer } from "../response/identitiy.serializer";
 import { ApiResponse } from "@/shared/http/response";
 
 /**

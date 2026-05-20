@@ -1,4 +1,4 @@
-import { registerTalentController } from "@/modules/identity/controllers/register-talent";
+import { registerTalentController } from "@/modules/catalog/controllers/register-talent";
 import { traceRoute } from "@/shared/interceptors/route-handler";
 import { requireAuth } from "@/shared/interceptors/auth-guard";
 

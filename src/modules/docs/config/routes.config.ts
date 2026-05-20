@@ -1,19 +1,12 @@
 import { z } from "zod";
-import {
-  registerUserSchema,
-  registerTalentSchema,
-  loginSchema,
-} from "@/modules/identity/request";
+import { registerUserSchema, loginSchema } from "@/modules/identity/request";
+import { registerTalentSchema } from "@/modules/catalog/request";
 
 // 1. Enforce strict token structures for HTTP parameters
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
 
 // 2. Map system domain modules to enforce clean tag segregation in Scalar docs
-export type ModuleTag =
-  | "Identity"
-  | "Marketplace"
-  | "MediaProcessing"
-  | "Webhooks";
+export type ModuleTag = "Identity" | "Catalog" | "MediaProcessing" | "Webhooks";
 
 /**
  * Strict structural contract representing an API endpoint configuration.
@@ -51,8 +44,8 @@ export const API_ROUTES: RouteDefinition[] = [
   {
     method: "POST",
     version: "v1",
-    module: "Identity",
-    path: "/api/identity/register-talent",
+    module: "Catalog",
+    path: "/api/catalog/register-talent",
     summary: "Elevate a base user profile to marketplace talent",
     description:
       "Upgrades an authenticated user to a talent profile status and mounts portfolio/skill criteria within an atomic database transaction window.",

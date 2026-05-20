@@ -15,8 +15,8 @@ export default defineConfig({
   dialect: "postgresql",
   schema: "./src/modules/**/*.schema.ts",
   out: "./drizzle",
-  // Restrict schema tracking scope explicitly to the identity database namespace bounds
-  schemaFilter: ["identity"],
+  // Restrict schema tracking scope explicitly to the database namespace bounds
+  schemaFilter: ["identity", "catalog"],
   dbCredentials: {
     url: process.env.DATABASE_URL,
   },

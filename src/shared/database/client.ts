@@ -3,6 +3,7 @@ import postgres from "postgres";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { CONFIG } from "@/config/env.config";
 import * as identitySchema from "@/modules/identity/identity.schema";
+import * as catalogSchema from "@/modules/catalog/catalog.schema";
 
 /**
  * Global Database Schema Composition Root.
@@ -11,6 +12,7 @@ import * as identitySchema from "@/modules/identity/identity.schema";
  */
 export const appSchema = {
   ...identitySchema,
+  ...catalogSchema,
 };
 
 /** Inferred Compile-Time Client Database Type Matrix. */

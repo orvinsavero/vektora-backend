@@ -1,5 +1,5 @@
-import { talents } from "../identity.schema";
-import { IDENTITY_LIMITS } from "../identity.constants";
+import { talents } from "../catalog.schema";
+import { IDENTITY_LIMITS } from "../../identity/identity.constants";
 import { z } from "zod";
 
 /**

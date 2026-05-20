@@ -7,4 +7,3 @@ export * from "./response";
 
 export { loginController } from "./controllers/login";
 export { registerUserController } from "./controllers/register-user";
-export { registerTalentController } from "./controllers/register-talent";
