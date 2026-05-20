@@ -8,7 +8,7 @@ export interface SerializedUserResponse {
   firstName: string | null;
   lastName: string | null;
   birthDate: string | null;
-  avatarUrl: string | null;
+  avatarUrl: string;
   currentContext: string;
   saldoWallet: string | number;
   isVerified: boolean;
@@ -32,7 +32,7 @@ export interface SerializedAuthResponse {
   id: string;
   username: string;
   displayName: string;
-  avatarUrl: string | null;
+  avatarUrl: string;
   currentContext: "USER" | "TALENT" | string;
 }
 
@@ -44,7 +44,7 @@ export interface SerializedUserProfileResponse {
   firstName: string | null;
   lastName: string | null;
   birthDate: string;
-  avatarUrl: string | null;
+  avatarUrl: string; // Enforced non-nullable string to match database schema defaults
   currentContext: string;
   saldoWallet: number;
   isVerified: boolean;
@@ -56,6 +56,35 @@ export interface SerializedUserProfileResponse {
 }
 
 type UserRow = typeof users.$inferSelect;
+
+type AssertExtends<T extends U, U> = true;
+
+/**
+ * Strict Compile-Time Structural Serialization Contract.
+ * Guarantees that if schema columns shift, the serializer layer breaks compilation instantly.
+ */
+type EnforceSerializerContract = AssertExtends<
+  {
+    [K in keyof SerializedUserProfileResponse]: SerializedUserProfileResponse[K];
+  },
+  {
+    id: UserRow["id"];
+    email: UserRow["email"];
+    username: UserRow["username"];
+    firstName: UserRow["firstName"];
+    lastName: UserRow["lastName"];
+    birthDate: UserRow["birthDate"];
+    avatarUrl: UserRow["avatarUrl"]; // Types align flawlessly now
+    currentContext: UserRow["currentContext"];
+    saldoWallet: number;
+    isVerified: UserRow["isVerified"];
+    language: UserRow["language"];
+    theme: UserRow["theme"];
+    timezone: UserRow["timezone"];
+    createdAt: string;
+    updatedAt: string;
+  }
+>;
 
 /**
  * Data Transformation and Serialization Layer.
@@ -77,9 +106,7 @@ export class IdentitySerializer {
       firstName: user.firstName ?? null,
       lastName: user.lastName ?? null,
       birthDate: user.birthDate ?? null,
-      avatarUrl:
-        user.avatarUrl ??
-        "https://storage.vektora.io/avatars/default-placeholder.png",
+      avatarUrl: user.avatarUrl,
       currentContext: user.currentContext,
       saldoWallet: user.saldoWallet,
       isVerified: user.isVerified,
@@ -103,7 +130,7 @@ export class IdentitySerializer {
       displayName:
         `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() ||
         user.username,
-      avatarUrl: user.avatarUrl ?? null,
+      avatarUrl: user.avatarUrl,
       currentContext: user.currentContext,
     };
   }
@@ -124,7 +151,7 @@ export class IdentitySerializer {
       birthDate: user.birthDate,
       avatarUrl: user.avatarUrl,
       currentContext: user.currentContext,
-      saldoWallet: Number(user.saldoWallet || 0), // Explicit protection against numeric database string mappings
+      saldoWallet: Number(user.saldoWallet || 0),
       isVerified: user.isVerified,
       language: user.language,
       theme: user.theme,

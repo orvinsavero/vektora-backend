@@ -1,5 +1,5 @@
 import { IdentityService } from "../services/identity.service";
-import { IdentitySerializer } from "../response/identitiy.serializer";
+import { IdentitySerializer } from "../response/identity.serializer";
 import { updateProfileSchema } from "../request/update-profile.dto";
 import { ApiResponse } from "@/shared/http/response";
 import { AuthenticatedNextRequest } from "@/shared/interceptors/auth-guard";

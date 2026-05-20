@@ -5,6 +5,7 @@ import {
 } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import { API_ROUTES } from "../config/routes.config";
+import { CONFIG } from "@/config/env.config";
 
 // 1. Initialize prototype extensions safely before building the ledger graph
 extendZodWithOpenApi(z);
@@ -41,7 +42,7 @@ API_ROUTES.forEach((route) => {
 
   // Map individual route parameter blocks matching OpenAPI structural constraints
   registry.registerPath({
-    // FIX: Convert "GET"/"POST" to lowercase dynamically and cast to satisfy the internal zod-to-openapi type definition
+    // Convert "GET"/"POST" to lowercase dynamically and cast to satisfy the internal zod-to-openapi type definition
     method: route.method.toLowerCase() as
       | "get"
       | "post"
@@ -76,9 +77,16 @@ API_ROUTES.forEach((route) => {
 
 /**
  * Compiles the programmatically evaluated registry matrix into an openAPI 3.0 specification object.
+ * Dynamically maps deployment server URLs using centralized configuration profiles.
  */
 export function generateOpenApiDocument() {
   const generator = new OpenApiGeneratorV3(registry.definitions);
+
+  // Evaluate dynamic cluster environments to eliminate manual testing code shifts
+  const targetServerUrl =
+    CONFIG.isProduction || CONFIG.isStaging
+      ? "https://api.vektora.io" // Swap with your live external domain layout when executing host pushes
+      : `http://localhost:${CONFIG.port}`;
 
   return generator.generateDocument({
     openapi: "3.0.0",
@@ -88,6 +96,13 @@ export function generateOpenApiDocument() {
       description:
         "High-performance modular engine for the AI media generation marketplace.",
     },
-    servers: [{ url: "http://localhost:3000" }],
+    servers: [
+      {
+        url: targetServerUrl,
+        description: CONFIG.isProduction
+          ? "Production API Cluster Node"
+          : "Local Engine Development Loop",
+      },
+    ],
   });
 }

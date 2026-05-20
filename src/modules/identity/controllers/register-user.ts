@@ -1,34 +1,42 @@
 import { NextRequest } from "next/server";
 import { IdentityService } from "../services/identity.service";
 import { registerUserSchema } from "../request/register-user.dto";
-import { IdentitySerializer } from "../response/identitiy.serializer";
-import { ApiResponse } from "@/shared/http/response";
+import { IdentitySerializer } from "../response/identity.serializer";
+import { ApiResponse, CookieManager } from "@/shared/http/response";
+import { Security } from "@/shared/crypto/security";
 
 /**
- * Core Controller Handler for New User Profile Registrations.
- * Extracts, validates, and orchestrates data mapping at the identity module boundary.
+ * Controller Handler for Handling Public Account Registrations.
+ * Validates inbound parameter payloads and automatically mints an active session context.
+ * @param {NextRequest} req - Inbound network request container abstraction.
+ * @returns {Promise<Response>} Structured success wrapping serialized account records with authentication cookies.
  */
 export async function registerUserController(
   req: NextRequest,
 ): Promise<Response> {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
 
-    // Validate request constraints at the boundary perimeter
+    // Evaluate payload structure against centralized zod compilation rules
     const validatedData = registerUserSchema.parse(body);
 
-    // Delegate business logic processing down to the service layer
+    // Commit state transitions directly down onto database connection references
     const rawUser = await IdentityService.registerNewUser(validatedData);
 
-    // Apply exact data translation formatting rules to strip internal database symbols
+    // Mint a cryptographically secure session token instantly upon account creation
+    const sessionToken = await Security.generateToken({ userId: rawUser.id });
+
+    // Format relational engine output schemas safely through the serialization firewall
     const serializedUser = IdentitySerializer.formatUser(rawUser);
 
-    return ApiResponse.success(serializedUser, 201);
+    // Construct response envelope with 201 Created state representation
+    const response = ApiResponse.success(serializedUser, 201);
+
+    // Inject the HttpOnly session token cookie directly into response headers
+    CookieManager.injectAuthCookie(response, sessionToken);
+
+    return response;
   } catch (error) {
-    /**
-     * Catches and channels exceptions straight to structural JSON wrappers.
-     * Automatically appends correlation trace IDs from the ambient context store.
-     */
     return ApiResponse.handle(error);
   }
 }

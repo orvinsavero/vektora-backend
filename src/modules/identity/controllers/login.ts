@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { IdentityService } from "../services/identity.service";
 import { loginSchema } from "../request/login.dto";
-import { IdentitySerializer } from "../response/identitiy.serializer";
+import { IdentitySerializer } from "../response/identity.serializer";
 import { ApiResponse, CookieManager } from "@/shared/http/response";
 import { Security } from "@/shared/crypto/security";
 

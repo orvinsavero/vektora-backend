@@ -12,6 +12,27 @@ export interface SerializedTalentResponse {
 
 type TalentRow = typeof talents.$inferSelect;
 
+type AssertExtends<T extends U, U> = true;
+
+/**
+ * Strict Compile-Time Structural Serialization Contract.
+ * Guarantees that if catalog table columns shift, the serialization structure breaks compilation instantly.
+ */
+type EnforceTalentSerializerContract = AssertExtends<
+  {
+    [K in keyof SerializedTalentResponse]: SerializedTalentResponse[K];
+  },
+  {
+    id: TalentRow["id"];
+    userId: TalentRow["userId"];
+    bio: TalentRow["bio"];
+    skills: TalentRow["skills"];
+    isVerified: TalentRow["isVerified"];
+    createdAt: string; // ISO string cast output
+    updatedAt: string; // ISO string cast output
+  }
+>;
+
 /**
  * Catalog Domain Transformation Layer.
  * Sanitizes internal database storage layers into structured public wire models.

@@ -1,1 +1,1 @@
-export * from "./identitiy.serializer";
+export * from "./identity.serializer";
