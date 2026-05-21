@@ -1,11 +1,11 @@
 // src/modules/identity/controllers/logout.ts
 import { cache } from "@/shared/cache/redis";
-import { ApiResponse } from "@/shared/http/response";
+import { ApiResponse, CookieManager } from "@/shared/http/response";
 import { AuthenticatedNextRequest } from "@/shared/interceptors/auth-guard";
 
 /**
  * Controller Handler for Evicting Authenticated Sessions.
- * Clears the network cookie buffer and purges Redis cache keys instantly.
+ * Purges Redis cache keys and clears the client browser session token cleanly.
  */
 export async function logoutController(
   req: AuthenticatedNextRequest,
@@ -18,16 +18,14 @@ export async function logoutController(
       cache.del(`session:active:${activeUserId}`).catch(() => {});
     }
 
-    // 2. Build response and overwrite the cookie with an immediate expiration date
+    // 2. Build response envelope layer
     const response = ApiResponse.success(
       { message: "Logged out successfully." },
       200,
     );
 
-    response.headers.set(
-      "Set-Cookie",
-      "auth_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
-    );
+    // 3. Evict auth session cookies securely via the centralized helper utility
+    CookieManager.clearAuthCookie(response);
 
     return response;
   } catch (error) {

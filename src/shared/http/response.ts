@@ -153,4 +153,20 @@ export class CookieManager {
       maxAge: AUTH_COOKIE_CONFIG.options.maxAge,
     });
   }
+
+  /**
+   * Clears the authentication token cookie from the client browser session interface.
+   * Overwrites the cookie parameters with an immediate expiration lifecycle window.
+   * @param {NextResponse} response - Outbound target HTTP server response interface.
+   */
+  static clearAuthCookie(response: NextResponse): void {
+    response.cookies.set(AUTH_COOKIE_CONFIG.name, "", {
+      path: AUTH_COOKIE_CONFIG.options.path,
+      httpOnly: AUTH_COOKIE_CONFIG.options.httpOnly,
+      secure: CONFIG.isProduction || CONFIG.isStaging,
+      sameSite: AUTH_COOKIE_CONFIG.options.sameSite,
+      maxAge: 0,
+      expires: new Date(0), // Sets expiration to Thu, 01 Jan 1970 00:00:00 GMT
+    });
+  }
 }
