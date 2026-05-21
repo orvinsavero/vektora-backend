@@ -6,6 +6,7 @@ import { USER_CONTEXT } from "../../identity/identity.constants";
 import { RegisterTalentPayload } from "../../catalog/request/register-talent.dto";
 import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
 import { logger } from "@/shared/telemetry/logger";
+import { cache } from "@/shared/cache/redis";
 
 type TalentRow = typeof talents.$inferSelect;
 
@@ -75,6 +76,11 @@ export class CatalogService {
           updatedAt: sql`now()`,
         })
         .where(eq(users.id, userId));
+
+      // 6. CLEAR CACHE HERE: Forces auth-guard to re-evaluate the new TALENT context state instantly
+      if (cache.isOpen) {
+        cache.del(`session:active:${userId}`).catch(() => {});
+      }
 
       return newTalent;
     } catch (error) {

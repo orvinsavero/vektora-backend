@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { db } from "@/shared/database/client";
 import { CatalogService } from "./catalog.service";
 import { users } from "../../identity/identity.schema";
 import { talents } from "../catalog.schema";
 import { USER_CONTEXT } from "../../identity/identity.constants";
 import { eq, inArray } from "drizzle-orm";
+import { cache } from "@/shared/cache/redis";
 
 describe("CatalogService - registerAsTalent", () => {
   let mockUser: typeof users.$inferSelect;
@@ -104,5 +105,30 @@ describe("CatalogService - registerAsTalent", () => {
     await expect(CatalogService.registerAsTalent(payload, db)).rejects.toThrow(
       "This user is already registered as a talent.",
     );
+  });
+
+  // CLEANED UP: Merged here so it inherits before/after hooks automatically and cleans up the DB perfectly
+  it("should attempt to clear the active session cache when a user upgrades to talent", async () => {
+    const payload = {
+      userId: mockUser.id,
+      bio: "Valid bio string",
+      skills: ["Design"],
+    };
+
+    // 1. Force isOpen to evaluate to true for this specific execution context
+    (cache as any).isOpen = true;
+
+    // 2. Set up a spy on the mocked del implementation
+    const delSpy = vi.spyOn(cache, "del");
+
+    // 3. Trigger your service mutation method
+    await CatalogService.registerAsTalent(payload, db);
+
+    // 4. Verify that the cache eviction line was successfully triggered with the correct key pattern
+    expect(delSpy).toHaveBeenCalledWith(`session:active:${payload.userId}`);
+
+    // 5. Clean up your state tracking and mock configuration after the pass
+    delSpy.mockRestore();
+    (cache as any).isOpen = false;
   });
 });

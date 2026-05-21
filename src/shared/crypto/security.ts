@@ -2,6 +2,7 @@ import argon2 from "argon2";
 import { SignJWT, jwtVerify } from "jose";
 import { HASH_CONFIG } from "@/modules/identity/identity.constants";
 import { ValidationError } from "@/shared/errors/app-error";
+import { CONFIG } from "@/config/env.config";
 
 /**
  * Cryptographic Security and Identity Utility.
@@ -13,8 +14,7 @@ export class Security {
 
   // Convert our environment secret string into an encoded byte matrix for the Web Crypto API
   private static readonly SECRET_KEY = new TextEncoder().encode(
-    process.env.JWT_SECRET ||
-      "fallback_unsecure_development_secret_key_change_me_in_prod",
+    CONFIG.jwtSecret,
   );
 
   /**

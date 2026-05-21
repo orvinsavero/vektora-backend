@@ -12,6 +12,23 @@ const envSchema = z.object({
     .string()
     .url("DATABASE_URL must be a valid connection string."),
 
+  REDIS_URL: z
+    .string()
+    .url("REDIS_URL must be a valid connection string.")
+    .default("redis://localhost:6379"),
+
+  AUTH_CACHE_TTL: z.coerce.number().positive().default(600),
+  REDIS_CONNECT_TIMEOUT_MS: z.coerce.number().positive().default(2000),
+  REDIS_MAX_RETRIES: z.coerce.number().positive().default(3),
+
+  // ENFORCED LINE: Absolute mandatory requirement for boot eligibility
+  JWT_SECRET: z
+    .string()
+    .min(
+      32,
+      "JWT_SECRET must be a cryptographically strong string containing at least 32 characters.",
+    ),
+
   APP_ENV: z
     .enum(["development", "staging", "production", "test"])
     .default("development"),
@@ -60,6 +77,8 @@ if (!parsedEnv.success) {
 export const CONFIG = {
   port: parsedEnv.data.PORT,
   databaseUrl: parsedEnv.data.DATABASE_URL,
+  redisUrl: parsedEnv.data.REDIS_URL,
+  jwtSecret: parsedEnv.data.JWT_SECRET,
   env: parsedEnv.data.APP_ENV,
 
   // High-level environmental semantic markers derived centrally
@@ -71,6 +90,13 @@ export const CONFIG = {
   logger: {
     level: parsedEnv.data.LOG_LEVEL,
     sync: parsedEnv.data.LOG_SYNC,
+  },
+  auth: {
+    cacheTtl: parsedEnv.data.AUTH_CACHE_TTL,
+  },
+  redis: {
+    connectTimeout: parsedEnv.data.REDIS_CONNECT_TIMEOUT_MS,
+    maxRetries: parsedEnv.data.REDIS_MAX_RETRIES,
   },
 } as const;
 

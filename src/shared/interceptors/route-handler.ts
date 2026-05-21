@@ -2,10 +2,11 @@ import { NextRequest } from "next/server";
 import { logger } from "../telemetry/logger";
 import { ApiResponse } from "../http/response";
 import { requestStorage } from "../telemetry/context";
+import { CONFIG } from "@/config/env.config";
 
 type VectorHandler = (req: NextRequest) => Promise<Response> | Response;
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = CONFIG.isProduction;
 
 /**
  * Higher-Order Centralized Route Interceptor for Next.js App Router.

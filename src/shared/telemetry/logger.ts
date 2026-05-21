@@ -1,7 +1,7 @@
 import pino from "pino";
 import { CONFIG } from "@/config/env.config";
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = CONFIG.isProduction;
 
 const pinoDestination = pino.destination({
   dest: 1,
@@ -14,7 +14,7 @@ export const logger = pino(
     level: CONFIG.logger.level || "info",
     base: {
       pid: process.pid,
-      env: process.env.NODE_ENV,
+      env: CONFIG.env,
     },
     timestamp: pino.stdTimeFunctions.isoTime,
   },
