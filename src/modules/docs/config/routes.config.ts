@@ -93,4 +93,14 @@ export const API_ROUTES: RouteDefinition[] = [
       "Mutates sensitive registration paths (email, username, password) following thorough unique restriction verification checks.",
     isProtected: true,
   },
+  {
+    method: "POST",
+    version: "v1",
+    module: "Identity",
+    path: "/api/identity/logout",
+    summary: "Log out active user session",
+    description:
+      "Clears the active HTTP-only authentication cookie and destroys the active session layout string inside the Redis cache pool.",
+    isProtected: true,
+  },
 ];
