@@ -9,7 +9,7 @@ import { Security } from "@/shared/crypto/security";
  * Controller Handler for Handling Public Account Registrations.
  * Validates inbound parameter payloads and automatically mints an active session context.
  * @param {NextRequest} req - Inbound network request container abstraction.
- * @returns {Promise<Response>} Structured success wrapping serialized account records with authentication cookies.
+ * @returns {Promise<Response>} Structured success wrapping serialized auth records with authentication cookies.
  */
 export async function registerUserController(
   req: NextRequest,
@@ -26,11 +26,11 @@ export async function registerUserController(
     // Mint a cryptographically secure session token instantly upon account creation
     const sessionToken = await Security.generateToken({ userId: rawUser.id });
 
-    // Format relational engine output schemas safely through the serialization firewall
-    const serializedUser = IdentitySerializer.formatUser(rawUser);
+    // Format outbound payload cleanly via the session hydration contract
+    const serializedAuth = IdentitySerializer.formatAuthResponse(rawUser);
 
     // Construct response envelope with 201 Created state representation
-    const response = ApiResponse.success(serializedUser, 201);
+    const response = ApiResponse.success(serializedAuth, 201);
 
     // Inject the HttpOnly session token cookie directly into response headers
     CookieManager.injectAuthCookie(response, sessionToken);

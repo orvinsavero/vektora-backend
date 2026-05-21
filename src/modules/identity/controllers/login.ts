@@ -11,7 +11,7 @@ import { Security } from "@/shared/crypto/security";
  */
 export async function loginController(req: NextRequest): Promise<Response> {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const validatedData = loginSchema.parse(body);
 
     // 1. Authenticate user credentials via service layer pool
@@ -20,11 +20,11 @@ export async function loginController(req: NextRequest): Promise<Response> {
     // 2. Mint a secure JSON Web Token variant
     const token = await Security.generateToken({ userId: user.id });
 
-    // 3. Serialize user entity data to seal internal database details
-    const serializedUser = IdentitySerializer.formatAuthResponse(user);
+    // 3. Serialize outbound payload cleanly via the session hydration contract
+    const serializedAuth = IdentitySerializer.formatAuthResponse(user);
 
-    // 4. Build the JSON success response envelope layer
-    const response = ApiResponse.success({ user: serializedUser }, 200);
+    // 4. Build the JSON success response envelope layer matching unified specs
+    const response = ApiResponse.success(serializedAuth, 200);
 
     // 5. Inject decoupled auth session cookies securely via the helper utility
     CookieManager.injectAuthCookie(response, token);

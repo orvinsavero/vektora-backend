@@ -1,42 +1,27 @@
 import { users } from "../identity.schema";
 
-/** Structural API contract definitions mapping outbound network response shapes explicitly */
-export interface SerializedUserResponse {
-  id: string;
-  email: string;
-  username: string;
-  firstName: string | null;
-  lastName: string | null;
-  birthDate: string | null;
-  avatarUrl: string;
-  currentContext: string;
-  saldoWallet: string | number;
-  isVerified: boolean;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+type UserRow = typeof users.$inferSelect;
 
-export interface SerializedTalentResponse {
-  id: string;
-  userId: string;
-  bio: string | null;
-  skills: string[];
-  isVerified: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** Lightweight, high-performance DTO contract for client-side state hydration upon successful login/registration */
+/** * 1. REGISTRATION / LOGIN RESPONSE CONTRACT (Lean & UX Bootstrapping)
+ * Specifically optimized to hydrate global client app states (Zustand/Redux) upon authentication.
+ * Includes nested preferences to instantly configure UI rules without extra API roundtrips.
+ */
 export interface SerializedAuthResponse {
   id: string;
   username: string;
   displayName: string;
   avatarUrl: string;
-  currentContext: "USER" | "TALENT" | string;
+  currentContext: string;
+  preferences: {
+    language: string;
+    theme: string;
+    timezone: string;
+  };
 }
 
-/** Strict outbound wire payload contract definition for self-service personal identity lookups */
+/** * 2. FULL PROFILE RESPONSE CONTRACT (Fully Hydrated Dashboard & Settings)
+ * Built to completely populate the personal profile management panel with metadata configuration blocks.
+ */
 export interface SerializedUserProfileResponse {
   id: string;
   email: string;
@@ -44,18 +29,17 @@ export interface SerializedUserProfileResponse {
   firstName: string | null;
   lastName: string | null;
   birthDate: string;
-  avatarUrl: string; // Enforced non-nullable string to match database schema defaults
+  avatarUrl: string;
   currentContext: string;
   saldoWallet: number;
   isVerified: boolean;
-  createdAt: string;
-  updatedAt: string;
+  isActive: boolean;
   language: string;
   theme: string;
   timezone: string;
+  createdAt: string;
+  updatedAt: string;
 }
-
-type UserRow = typeof users.$inferSelect;
 
 type AssertExtends<T extends U, U> = true;
 
@@ -74,10 +58,11 @@ type EnforceSerializerContract = AssertExtends<
     firstName: UserRow["firstName"];
     lastName: UserRow["lastName"];
     birthDate: UserRow["birthDate"];
-    avatarUrl: UserRow["avatarUrl"]; // Types align flawlessly now
+    avatarUrl: UserRow["avatarUrl"];
     currentContext: UserRow["currentContext"];
     saldoWallet: number;
     isVerified: UserRow["isVerified"];
+    isActive: UserRow["isActive"];
     language: UserRow["language"];
     theme: UserRow["theme"];
     timezone: UserRow["timezone"];
@@ -88,38 +73,12 @@ type EnforceSerializerContract = AssertExtends<
 
 /**
  * Data Transformation and Serialization Layer.
- * Intercepts internal relational storage entities and converts them into strict public wire contracts.
- * Decouples system schema dependencies and isolates sensitive parameters to secure the API boundary.
+ * Decouples internal database entities from outward-facing wire payload architectures.
  */
 export class IdentitySerializer {
   /**
-   * Sanitizes and maps database user records into standardized data schemas.
-   * Explicitly drops system internals such as password hashes from outbound visibility.
-   * @param {UserRow} user - Source internal database selection schema row.
-   * @returns {SerializedUserResponse} Transformed public data contract representation.
-   */
-  static formatUser(user: UserRow): SerializedUserResponse {
-    return {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      firstName: user.firstName ?? null,
-      lastName: user.lastName ?? null,
-      birthDate: user.birthDate ?? null,
-      avatarUrl: user.avatarUrl,
-      currentContext: user.currentContext,
-      saldoWallet: user.saldoWallet,
-      isVerified: user.isVerified,
-      isActive: user.isActive,
-      createdAt: (user.createdAt ?? new Date()).toISOString(),
-      updatedAt: (user.updatedAt ?? new Date()).toISOString(),
-    };
-  }
-
-  /**
-   * Trims down raw database records into a lean, optimized object
-   * specifically built to bootstrap the client-side UI upon authentication.
-   * Eliminates system metadata, balances, and timestamps to optimize wire size.
+   * Trims down raw database records into a high-performance session payload for Auth gates.
+   * Maps to: POST /api/identity/register-user, POST /api/identity/login
    * @param {UserRow} user - Source internal database selection schema row.
    * @returns {SerializedAuthResponse} Hardened UI hydration wire profile.
    */
@@ -132,12 +91,17 @@ export class IdentitySerializer {
         user.username,
       avatarUrl: user.avatarUrl,
       currentContext: user.currentContext,
+      preferences: {
+        language: user.language,
+        theme: user.theme,
+        timezone: user.timezone,
+      },
     };
   }
 
   /**
    * Transmutes raw relational database records into an unprivileged personal account overview.
-   * Enforces rigorous data sanitization loops and casts structural balance constraints securely.
+   * Maps to: GET /api/identity/profile, PATCH /api/identity/profile, PUT /api/identity/account
    * @param {UserRow} user - Source internal database selection schema row.
    * @returns {SerializedUserProfileResponse} Sanitized personal identity overview contract.
    */
@@ -153,6 +117,7 @@ export class IdentitySerializer {
       currentContext: user.currentContext,
       saldoWallet: Number(user.saldoWallet || 0),
       isVerified: user.isVerified,
+      isActive: user.isActive,
       language: user.language,
       theme: user.theme,
       timezone: user.timezone,
