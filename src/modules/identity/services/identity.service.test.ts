@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { db } from "@/shared/database/client";
 import { IdentityService } from "./identity.service";
 import { users } from "../identity.schema";
@@ -7,6 +7,7 @@ import { ConflictError, UnauthorizedError } from "@/shared/errors/app-error";
 import { USER_CONTEXT } from "../identity.constants";
 import { RegisterUserPayload } from "../request";
 import { Security } from "@/shared/crypto/security";
+import { cache } from "@/shared/cache/redis";
 
 describe("IdentityService Integration Tests", () => {
   let createdUserEmails: string[] = [];
@@ -227,6 +228,115 @@ describe("IdentityService Integration Tests", () => {
       await expect(
         IdentityService.updateUserProfile(missingId, { theme: "light" }, db),
       ).rejects.toThrow("Target user profile does not exist.");
+    });
+  });
+
+  describe("updateAccountCredentials", () => {
+    let testUser: typeof users.$inferSelect;
+
+    beforeEach(async () => {
+      // Provision a fresh user row for each test case
+      const payload = createValidUserPayload({
+        email: `target_account_${crypto.randomUUID().substring(0, 8)}@vektora.io`,
+        username: `account_test_${crypto.randomUUID().substring(0, 8)}`,
+        password: "OldSecurePassword123!",
+      });
+      testUser = await IdentityService.registerNewUser(payload, db);
+    });
+
+    it("should successfully apply individual partial updates for email only and clear the cache", async () => {
+      const newEmail = `fresh_email_${crypto.randomUUID().substring(0, 8)}@vektora.io`;
+      createdUserEmails.push(newEmail); // Track new email for global afterEach cleanup
+
+      // 1. Mock cache state to verify eviction loop triggers
+      (cache as any).isOpen = true;
+      const delSpy = vi.spyOn(cache, "del");
+
+      // 2. Fire change event for a single field
+      const updatedUser = await IdentityService.updateAccountCredentials(
+        testUser.id,
+        { email: newEmail },
+        db,
+      );
+
+      // 3. Assertions
+      expect(updatedUser.email).toBe(newEmail);
+      expect(updatedUser.username).toBe(testUser.username); // Remained untouched
+      expect(delSpy).toHaveBeenCalledWith(`session:active:${testUser.id}`);
+
+      delSpy.mockRestore();
+      (cache as any).isOpen = false;
+    });
+
+    it("should successfully re-hash the cleartext password using Argon2id algorithms", async () => {
+      const newCleartextPassword = "BrandNewSecurePassword999!";
+
+      const updatedUser = await IdentityService.updateAccountCredentials(
+        testUser.id,
+        { password: newCleartextPassword },
+        db,
+      );
+
+      // Fetch the updated row straight from DB to evaluate hash parameters
+      const dbRow = await db.query.users.findFirst({
+        where: eq(users.id, testUser.id),
+      });
+
+      expect(dbRow).toBeDefined();
+      expect(dbRow!.passwordHash).not.toBe(testUser.passwordHash);
+
+      const isNewPasswordMatch = await Security.verifyPassword(
+        newCleartextPassword,
+        dbRow!.passwordHash,
+      );
+      expect(isNewPasswordMatch).toBe(true);
+    });
+
+    it("should throw an operational ConflictError if the targeted email is already allocated to another profile", async () => {
+      // Seed a different conflict competitor profile
+      const conflictPayload = createValidUserPayload({
+        email: "existing_competitor@vektora.io",
+        username: "competitor_username",
+      });
+      await IdentityService.registerNewUser(conflictPayload, db);
+
+      // Attempt to hijack their email path
+      await expect(
+        IdentityService.updateAccountCredentials(
+          testUser.id,
+          { email: "existing_competitor@vektora.io" },
+          db,
+        ),
+      ).rejects.toThrow(ConflictError);
+    });
+
+    it("should throw an operational ConflictError if the targeted username is already taken", async () => {
+      const conflictPayload = createValidUserPayload({
+        email: "different_competitor@vektora.io",
+        username: "taken_username",
+      });
+      await IdentityService.registerNewUser(conflictPayload, db);
+
+      // Attempt to hijack their username handle
+      await expect(
+        IdentityService.updateAccountCredentials(
+          testUser.id,
+          { username: "taken_username" },
+          db,
+        ),
+      ).rejects.toThrow(ConflictError);
+    });
+
+    it("should return the unmutated profile cleanly if the payload collection is empty", async () => {
+      const userResult = await IdentityService.updateAccountCredentials(
+        testUser.id,
+        {},
+        db,
+      );
+
+      expect(userResult.id).toBe(testUser.id);
+      expect(userResult.email).toBe(testUser.email);
+      expect(userResult.username).toBe(testUser.username);
     });
   });
 });

@@ -83,4 +83,14 @@ export const API_ROUTES: RouteDefinition[] = [
       "Accepts partial optional frontend configurations and metadata variables, completely blocking system state overrides.",
     isProtected: true,
   },
+  {
+    method: "PUT",
+    version: "v1",
+    module: "Identity",
+    path: "/api/identity/account",
+    summary: "Update critical identity credentials",
+    description:
+      "Mutates sensitive registration paths (email, username, password) following thorough unique restriction verification checks.",
+    isProtected: true,
+  },
 ];

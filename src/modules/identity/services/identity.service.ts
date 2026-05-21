@@ -6,10 +6,12 @@ import {
   NotFoundError,
 } from "@/shared/errors/app-error";
 import { Security } from "@/shared/crypto/security";
+import { cache } from "@/shared/cache/redis";
 import {
   RegisterUserPayload,
   UpdateProfilePayload,
   LoginPayload,
+  UpdateAccountPayload,
 } from "../request";
 import { users } from "../identity.schema";
 import {
@@ -193,6 +195,68 @@ export class IdentityService {
 
     if (!updatedUser) {
       throw new NotFoundError("Target user profile does not exist.");
+    }
+
+    return updatedUser;
+  }
+
+  /**
+   * Modifies critical authentication elements after enforcing strict unique collisions gates.
+   * Evicts active caching spaces cleanly if structural tokens alter.
+   */
+  static async updateAccountCredentials(
+    userId: string,
+    payload: UpdateAccountPayload,
+    client: DbClient | DbTransaction = db,
+  ): Promise<UserRow> {
+    const updateData: Record<string, any> = {};
+
+    // 1. Handle Email Conflict Checks
+    if (payload.email) {
+      const existingEmail = await client.query.users.findFirst({
+        where: eq(users.email, payload.email),
+      });
+      if (existingEmail && existingEmail.id !== userId) {
+        throw new ConflictError("This email address is already in use.");
+      }
+      updateData.email = payload.email;
+    }
+
+    // 2. Handle Username Conflict Checks
+    if (payload.username) {
+      const existingUsername = await client.query.users.findFirst({
+        where: eq(users.username, payload.username),
+      });
+      if (existingUsername && existingUsername.id !== userId) {
+        throw new ConflictError("This username is already taken.");
+      }
+      updateData.username = payload.username;
+    }
+
+    // 3. Re-hash Password Buffers securely if targeted
+    if (payload.password) {
+      updateData.passwordHash = await Security.hashPassword(payload.password);
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return this.getUserProfileById(userId, client);
+    }
+
+    updateData.updatedAt = sql`now()`;
+
+    const [updatedUser] = await client
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updatedUser) {
+      throw new NotFoundError("Target user profile does not exist.");
+    }
+
+    // 4. EVICT CACHE IMMEDIATELY: Forces auth-guard to instantly map fresh state
+    if (cache.isOpen) {
+      cache.del(`session:active:${userId}`).catch(() => {});
     }
 
     return updatedUser;
