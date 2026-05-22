@@ -1,19 +1,21 @@
+// src/shared/interceptors/route-handler.ts
 import { NextRequest } from "next/server";
 import { logger } from "../telemetry/logger";
 import { ApiResponse } from "../http/response";
 import { requestStorage } from "../telemetry/context";
 import { CONFIG } from "@/config/env.config";
 
-type VectorHandler = (req: NextRequest) => Promise<Response> | Response;
-
 const isProduction = CONFIG.isProduction;
 
 /**
  * Higher-Order Centralized Route Interceptor for Next.js App Router.
  * Hydrates standard AsyncLocalStorage tracking metrics and unifies request/response telemetry logs.
+ * Supports native Next.js dynamic routing parameter contexts via generic rest parameter forwarding.
  */
-export function traceRoute(handler: VectorHandler): VectorHandler {
-  return async (req: NextRequest): Promise<Response> => {
+export function traceRoute<T extends any[]>(
+  handler: (req: NextRequest, ...args: T) => Promise<Response> | Response,
+) {
+  return async (req: NextRequest, ...args: T): Promise<Response> => {
     const startTime = performance.now();
 
     const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
@@ -59,7 +61,8 @@ export function traceRoute(handler: VectorHandler): VectorHandler {
       }
 
       try {
-        const response = await handler(req);
+        // Forward the primary request along with any dynamic Next.js parameters context objects
+        const response = await handler(req, ...args);
         const durationMs = parseFloat(
           (performance.now() - startTime).toFixed(2),
         );
@@ -67,7 +70,6 @@ export function traceRoute(handler: VectorHandler): VectorHandler {
         // 3. Log Outbound Payload (Development Only)
         if (!isProduction) {
           try {
-            // Clone the response stream so the client can still read the original buffer cleanly
             const clonedRes = response.clone();
             const resBody = await clonedRes.json();
 

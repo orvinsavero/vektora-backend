@@ -17,7 +17,8 @@ export class CatalogService {
   /**
    * Transitions a standard user identity node into a productized talent storefront record.
    * Updates core security context flags and evicts active session cache keys instantly.
-   * * @param {Object} input - Structural parameter boundary package context.
+   *
+   * @param {Object} input - Structural parameter boundary package context.
    * @param {string} input.userId - The unique UUID target reference of the base user account.
    * @param {string} [input.bio] - Optional professional biography statement metadata.
    * @param {string[]} [input.skills] - Optional verified professional skill tag collections.
@@ -79,5 +80,39 @@ export class CatalogService {
     }
 
     return newTalent;
+  }
+
+  /**
+   * Resolves a fully-hydrated talent record joined with user metadata attributes by user account primary ID.
+   *
+   * @param {Object} input - Structural parameter context framework.
+   * @param {string} input.userId - Unique system user identity UUID tracking string.
+   * @param {DatabaseClient} [db=defaultDb] - Active database client instance used to pipeline query operations.
+   * @returns {Promise<{ talent: typeof talents.$inferSelect; user: typeof users.$inferSelect }> } Combined entity row model dataset.
+   * @throws {NotFoundError} If the targeted user context doesn't exist or hasn't upgraded to a seller profile.
+   */
+  static async getTalentByUserId(
+    input: { userId: string },
+    db: DatabaseClient = defaultDb,
+  ) {
+    const records = await db
+      .select()
+      .from(talents)
+      .where(eq(talents.userId, input.userId))
+      .leftJoin(users, eq(talents.userId, users.id))
+      .limit(1);
+
+    const match = records[0];
+
+    if (!match || !match.users || !match.talents) {
+      throw new NotFoundError(
+        "Requested marketplace talent storefront profile does not exist.",
+      );
+    }
+
+    return {
+      talent: match.talents,
+      user: match.users,
+    };
   }
 }

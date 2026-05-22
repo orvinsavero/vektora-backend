@@ -1,3 +1,4 @@
+// src/modules/docs/config/routes.config.ts
 import { z } from "zod";
 import { registerUserSchema, loginSchema } from "@/modules/identity/request";
 import { registerTalentSchema } from "@/modules/catalog/request";
@@ -61,7 +62,7 @@ export const API_ROUTES: RouteDefinition[] = [
     description:
       "Verifies incoming handle credentials against system hash signatures, generating short-lived access authorization and setting a secure session cookie.",
     isProtected: false,
-    requestBody: loginSchema, // Import this schema at the top of the file
+    requestBody: loginSchema,
   },
   {
     method: "GET",
@@ -101,6 +102,26 @@ export const API_ROUTES: RouteDefinition[] = [
     summary: "Log out active user session",
     description:
       "Clears the active HTTP-only authentication cookie and destroys the active session layout string inside the Redis cache pool.",
+    isProtected: true,
+  },
+  {
+    method: "GET",
+    version: "v1",
+    module: "Catalog",
+    path: "/api/catalog/talent/[id]", // Maps onto filesystem naming parameters safely
+    summary: "Resolve Public Talent Storefront",
+    description:
+      "Fetches a fully-hydrated profile layout joined with active user metadata parameters.",
+    isProtected: false,
+  },
+  {
+    method: "GET",
+    version: "v1",
+    module: "Catalog",
+    path: "/api/catalog/talent/me",
+    summary: "Retrieve Self-Service Seller Context",
+    description:
+      "Proxies active web session tokens straight down onto core dashboard record paths.",
     isProtected: true,
   },
 ];

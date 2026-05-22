@@ -8,7 +8,7 @@ import { USER_CONTEXT } from "../../identity/identity.constants";
 import { eq, inArray } from "drizzle-orm";
 import { cache } from "@/shared/cache/redis";
 
-describe("CatalogService - registerNewTalent", () => {
+describe("CatalogService Integration Tests", () => {
   let mockUser: typeof users.$inferSelect;
   let createdUserIds: string[] = [];
 
@@ -43,81 +43,133 @@ describe("CatalogService - registerNewTalent", () => {
     }
   });
 
-  it("should successfully upgrade a base user to a talent storefront profile (Happy Path)", async () => {
-    const payload = {
-      userId: mockUser.id,
-      bio: "Senior full stack designer specializing in hyper-scalable UI systems.",
-      skills: ["TypeScript", "Next.js", "TailwindCSS"],
-    };
+  describe("registerNewTalent", () => {
+    it("should successfully upgrade a base user to a talent storefront profile (Happy Path)", async () => {
+      const payload = {
+        userId: mockUser.id,
+        bio: "Senior full stack designer specializing in hyper-scalable UI systems.",
+        skills: ["TypeScript", "Next.js", "TailwindCSS"],
+      };
 
-    const talentResult = await CatalogService.registerNewTalent(payload, db);
+      const talentResult = await CatalogService.registerNewTalent(payload, db);
 
-    expect(talentResult).toBeDefined();
-    expect(talentResult.userId).toBe(mockUser.id);
-    expect(talentResult.bio).toBe(payload.bio);
-    expect(talentResult.skills).toEqual(payload.skills);
-    expect(talentResult.isVerified).toBe(false);
+      expect(talentResult).toBeDefined();
+      expect(talentResult.userId).toBe(mockUser.id);
+      expect(talentResult.bio).toBe(payload.bio);
+      expect(talentResult.skills).toEqual(payload.skills);
+      expect(talentResult.isVerified).toBe(false);
 
-    // Verify cache fields are default-initialized to integers to prevent floating-point anomalies
-    expect(talentResult.ratingCache).toBe(0);
-    expect(talentResult.reviewCountCache).toBe(0);
+      // Verify cache fields are default-initialized to integers to prevent floating-point anomalies
+      expect(talentResult.ratingCache).toBe(0);
+      expect(talentResult.reviewCountCache).toBe(0);
 
-    const updatedUser = await db.query.users.findFirst({
-      where: eq(users.id, mockUser.id),
+      const updatedUser = await db.query.users.findFirst({
+        where: eq(users.id, mockUser.id),
+      });
+
+      expect(updatedUser).toBeDefined();
+      expect(updatedUser?.currentContext).toBe(USER_CONTEXT.TALENT);
     });
 
-    expect(updatedUser).toBeDefined();
-    expect(updatedUser?.currentContext).toBe(USER_CONTEXT.TALENT);
+    it("should throw a NotFoundError if the target user id does not exist in the database", async () => {
+      const payload = {
+        userId: crypto.randomUUID(),
+        bio: "Valid bio string",
+        skills: ["Design"],
+      };
+
+      await expect(
+        CatalogService.registerNewTalent(payload, db),
+      ).rejects.toThrow("Target user account identity not found.");
+    });
+
+    it("should throw a ConflictError if the user is already registered as a talent storefront", async () => {
+      const payload = {
+        userId: mockUser.id,
+        bio: "First attempt profile initialization parameters.",
+        skills: ["Copywriting"],
+      };
+
+      await CatalogService.registerNewTalent(payload, db);
+
+      // Second attempt must violate uniqueness barriers and reject the instruction
+      await expect(
+        CatalogService.registerNewTalent(payload, db),
+      ).rejects.toThrow(
+        "This user identity is already configured as a seller profile.",
+      );
+    });
+
+    it("should attempt to clear the active session cache when a user upgrades to talent", async () => {
+      const payload = {
+        userId: mockUser.id,
+        bio: "Valid bio string",
+        skills: ["Design"],
+      };
+
+      // 1. Force isOpen to evaluate to true for this specific execution context
+      (cache as any).isOpen = true;
+
+      // 2. Set up a spy on the mocked del implementation
+      const delSpy = vi.spyOn(cache, "del");
+
+      // 3. Trigger your service mutation method
+      await CatalogService.registerNewTalent(payload, db);
+
+      // 4. Verify that the cache eviction line was successfully triggered with the correct key pattern
+      expect(delSpy).toHaveBeenCalledWith(`session:active:${payload.userId}`);
+
+      // 5. Clean up your state tracking and mock configuration after the pass
+      delSpy.mockRestore();
+      (cache as any).isOpen = false;
+    });
   });
 
-  it("should throw a NotFoundError if the target user id does not exist in the database", async () => {
-    const payload = {
-      userId: crypto.randomUUID(),
-      bio: "Valid bio string",
-      skills: ["Design"],
-    };
+  describe("getTalentByUserId", () => {
+    it("should successfully resolve a fully-hydrated talent and user row record object combination (Happy Path)", async () => {
+      // 1. Seed base seller record details
+      await CatalogService.registerNewTalent(
+        {
+          userId: mockUser.id,
+          bio: "Expert systems programmer.",
+          skills: ["Go", "Docker", "PostgreSQL"],
+        },
+        db,
+      );
 
-    await expect(CatalogService.registerNewTalent(payload, db)).rejects.toThrow(
-      "Target user account identity not found.",
-    );
-  });
+      // 2. Fire structural selection engine operations
+      const result = await CatalogService.getTalentByUserId(
+        { userId: mockUser.id },
+        db,
+      );
 
-  it("should throw a ConflictError if the user is already registered as a talent storefront", async () => {
-    const payload = {
-      userId: mockUser.id,
-      bio: "First attempt profile initialization parameters.",
-      skills: ["Copywriting"],
-    };
+      // 3. Assertions checking combined relation mapping integrity
+      expect(result).toBeDefined();
+      expect(result.talent).toBeDefined();
+      expect(result.user).toBeDefined();
+      expect(result.talent.userId).toBe(mockUser.id);
+      expect(result.talent.bio).toBe("Expert systems programmer.");
+      expect(result.user.username).toBe(mockUser.username);
+      expect(result.user.email).toBe(mockUser.email);
+    });
 
-    await CatalogService.registerNewTalent(payload, db);
+    it("should throw a NotFoundError if the user id is present in identity but lacks a seller row configuration", async () => {
+      // Execute retrieval against mockUser directly without running previous elevation transformations
+      await expect(
+        CatalogService.getTalentByUserId({ userId: mockUser.id }, db),
+      ).rejects.toThrow(
+        "Requested marketplace talent storefront profile does not exist.",
+      );
+    });
 
-    // Second attempt must violate uniqueness barriers and reject the instruction
-    await expect(CatalogService.registerNewTalent(payload, db)).rejects.toThrow(
-      "This user identity is already configured as a seller profile.",
-    );
-  });
+    it("should throw a NotFoundError if the requested tracking UUID identifier does not exist in database storage entirely", async () => {
+      const deadId = crypto.randomUUID();
 
-  it("should attempt to clear the active session cache when a user upgrades to talent", async () => {
-    const payload = {
-      userId: mockUser.id,
-      bio: "Valid bio string",
-      skills: ["Design"],
-    };
-
-    // 1. Force isOpen to evaluate to true for this specific execution context
-    (cache as any).isOpen = true;
-
-    // 2. Set up a spy on the mocked del implementation
-    const delSpy = vi.spyOn(cache, "del");
-
-    // 3. Trigger your service mutation method
-    await CatalogService.registerNewTalent(payload, db);
-
-    // 4. Verify that the cache eviction line was successfully triggered with the correct key pattern
-    expect(delSpy).toHaveBeenCalledWith(`session:active:${payload.userId}`);
-
-    // 5. Clean up your state tracking and mock configuration after the pass
-    delSpy.mockRestore();
-    (cache as any).isOpen = false;
+      await expect(
+        CatalogService.getTalentByUserId({ userId: deadId }, db),
+      ).rejects.toThrow(
+        "Requested marketplace talent storefront profile does not exist.",
+      );
+    });
   });
 });
