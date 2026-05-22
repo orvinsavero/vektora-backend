@@ -172,4 +172,60 @@ describe("CatalogService Integration Tests", () => {
       );
     });
   });
+
+  describe("updateTalentProfile", () => {
+    beforeEach(async () => {
+      // Automatically elevate our mock user to talent context prior to mutation checks
+      await CatalogService.registerNewTalent(
+        {
+          userId: mockUser.id,
+          bio: "Original bio parameters.",
+          skills: ["LegacySkill"],
+        },
+        db,
+      );
+    });
+
+    it("should successfully execute partial updates for bio and skills while preserving untouched properties", async () => {
+      const updates = {
+        bio: "Brand new modified system designer biography.",
+        skills: ["TypeScript", "Vitest", "Drizzle"],
+      };
+
+      const updatedRow = await CatalogService.updateTalentProfile(
+        mockUser.id,
+        updates,
+        db,
+      );
+
+      expect(updatedRow).toBeDefined();
+      expect(updatedRow.userId).toBe(mockUser.id);
+      expect(updatedRow.bio).toBe(updates.bio);
+      expect(updatedRow.skills).toEqual(updates.skills);
+      expect(updatedRow.isVerified).toBe(false); // Remained untouched
+    });
+
+    it("should gracefully return the unmutated record row intact if the payload fields package is completely empty", async () => {
+      const emptyPayload = {};
+
+      const untouchedRow = await CatalogService.updateTalentProfile(
+        mockUser.id,
+        emptyPayload,
+        db,
+      );
+
+      expect(untouchedRow).toBeDefined();
+      expect(untouchedRow.userId).toBe(mockUser.id);
+      expect(untouchedRow.bio).toBe("Original bio parameters.");
+      expect(untouchedRow.skills).toEqual(["LegacySkill"]);
+    });
+
+    it("should throw a NotFoundError instance if the provided target user tracking UUID does not exist inside the talents table", async () => {
+      const missingId = crypto.randomUUID();
+
+      await expect(
+        CatalogService.updateTalentProfile(missingId, { bio: "New text." }, db),
+      ).rejects.toThrow("Target marketplace talent profile does not exist.");
+    });
+  });
 });

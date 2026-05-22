@@ -124,4 +124,14 @@ export const API_ROUTES: RouteDefinition[] = [
       "Proxies active web session tokens straight down onto core dashboard record paths.",
     isProtected: true,
   },
+  {
+    method: "PATCH",
+    version: "v1",
+    module: "Catalog",
+    path: "/api/catalog/talent/profile",
+    summary: "Update Talent Storefront Showcase Settings",
+    description:
+      "Accepts partial modifications for professional biographies and skill tag matrices, stripping unauthorized column parameters.",
+    isProtected: true,
+  },
 ];

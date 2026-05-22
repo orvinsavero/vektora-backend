@@ -2,6 +2,7 @@
 import { db as defaultDb } from "@/shared/database/client";
 import { talents } from "../catalog.schema";
 import { users } from "../../identity/identity.schema";
+import { UpdateTalentProfilePayload } from "../request/update-talent.dto";
 import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
 import { eq } from "drizzle-orm";
 import { cache } from "@/shared/cache/redis";
@@ -114,5 +115,57 @@ export class CatalogService {
       talent: match.talents,
       user: match.users,
     };
+  }
+
+  /**
+   * Dynamically mutates a seller profile's allowable showcase configuration metrics.
+   * Strips un-whitelisted properties to protect system caches from manual injection exploits.
+   *
+   * @param {string} userId - Target unique identification tracking handle UUID string.
+   * @param {UpdateTalentProfilePayload} payload - Filtered profile modification parameters package map.
+   * @param {DatabaseClient} [db=defaultDb] - Relational context engine used to process database routines.
+   * @returns {Promise<typeof talents.$inferSelect>} Upgraded talent persistence row representation layout.
+   * @throws {NotFoundError} If the targeted seller account storefront doesn't exist in storage.
+   */
+  static async updateTalentProfile(
+    userId: string,
+    payload: UpdateTalentProfilePayload,
+    db: DatabaseClient = defaultDb,
+  ) {
+    const updateData: Record<string, any> = {};
+
+    // Explicitly whitelist only client-managed mutations
+    if (payload.bio !== undefined) updateData.bio = payload.bio;
+    if (payload.skills !== undefined) updateData.skills = payload.skills;
+
+    // Short-circuit operation if the payload collection is empty
+    if (Object.keys(updateData).length === 0) {
+      const existing = await db.query.talents.findFirst({
+        where: eq(talents.userId, userId),
+      });
+      if (!existing) {
+        throw new NotFoundError(
+          "Target marketplace talent profile does not exist.",
+        );
+      }
+      return existing;
+    }
+
+    // Force audit track timestamp renewal variables
+    updateData.updatedAt = new Date();
+
+    const [updatedTalent] = await db
+      .update(talents)
+      .set(updateData)
+      .where(eq(talents.userId, userId))
+      .returning();
+
+    if (!updatedTalent) {
+      throw new NotFoundError(
+        "Target marketplace talent profile does not exist.",
+      );
+    }
+
+    return updatedTalent;
   }
 }

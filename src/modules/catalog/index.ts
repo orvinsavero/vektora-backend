@@ -6,5 +6,6 @@ export * from "./request";
 export * from "./response";
 
 export { registerTalentController } from "./controllers/register-talent";
-export * from "./controllers/get-talent";
-export * from "./controllers/get-self-talent";
+export { getTalentController } from "./controllers/get-talent";
+export { getSelfTalentController } from "./controllers/get-self-talent";
+export { updateTalentProfileController } from "./controllers/update-talent";
