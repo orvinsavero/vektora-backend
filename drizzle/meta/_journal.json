@@ -15,6 +15,13 @@
       "when": 1779298590275,
       "tag": "0001_chilly_black_panther",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779449203853,
+      "tag": "0002_sticky_cyclops",
+      "breakpoints": true
     }
   ]
 }

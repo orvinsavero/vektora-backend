@@ -1,3 +1,4 @@
+// src/modules/identity/services/identity.service.ts
 import { or, eq, sql } from "drizzle-orm";
 import { db, DbClient, DbTransaction } from "@/shared/database/client";
 import {
@@ -30,8 +31,15 @@ export class IdentityService {
   /**
    * Evaluates identity conflicts and provisions a new base user account profile.
    * Encrypts incoming passwords via Argon2id prior to database persistence.
-   * * @param {RegisterUserPayload} payload - Validated request payload matching schema constraints.
-   * @param {DbClient | DbTransaction} [client=db] - Optional execution context to support atomic transaction blocks.
+   * * @param {Object} payload - Validated request registration payload matching schema constraints.
+   * @param {string} payload.email - Unique authoritative email reference communication key.
+   * @param {string} payload.username - System user identity moniker handle tracking string.
+   * @param {string} payload.password - Cleartext password token subject to cryptographic salt hashing.
+   * @param {string} [payload.firstName] - Optional first name personal parameter string.
+   * @param {string} [payload.lastName] - Optional last name personal parameter string.
+   * @param {string} payload.birthDate - Strict compliance verification date string (YYYY-MM-DD format).
+   * @param {string} [payload.avatarUrl] - Optional cloud object storage profile photo reference link.
+   * @param {DbClient | DbTransaction} [client=db] - Execution database driver fallback instance context.
    * @returns {Promise<UserRow>} Complete internal user record populated from the database write.
    * @throws {ConflictError} If the target email or username is already allocated within the persistence layer.
    */
@@ -80,7 +88,9 @@ export class IdentityService {
   /**
    * Authenticates user credentials against the current persistence layer data store.
    * Normalizes structural output errors to shield the server against brute-force timing profile attacks.
-   * * @param {LoginPayload} payload - Unverified handle and credential strings from login request.
+   * * @param {Object} payload - Unverified identification target and verification strings.
+   * @param {string} payload.usernameOrEmail - Unique system registration handle entry or targeted network email.
+   * @param {string} payload.password - Unchecked cleartext authentication password challenge payload.
    * @param {DbClient | DbTransaction} [client=db] - Relational context driver to route the selection query pass.
    * @returns {Promise<UserRow>} Authenticated database user selection model.
    * @throws {UnauthorizedError} A uniform generic exception emitted if the user doesn't exist OR hash checks fail.
@@ -124,8 +134,9 @@ export class IdentityService {
 
   /**
    * Resolves an active user profile entity via its primary unique ID.
-   * @param targetUserId The unique UUID of the user to look up.
-   * @param client The database client instance (defaults to global pool).
+   * * @param {string} targetUserId - The unique identifier UUID of the user to look up.
+   * @param {DbClient | DbTransaction} [client=db] - The database context proxy link instance.
+   * @returns {Promise<UserRow>} Relational user entity overview block matching target query criteria.
    * @throws {NotFoundError} If the targeted user record does not exist.
    */
   static async getUserProfileById(
@@ -148,9 +159,16 @@ export class IdentityService {
   /**
    * Dynamically mutates an existing user profile's allowable metadata parameters.
    * Automatically strips undefined keys to protect against partial data loss.
-   * @param {string} userId - Target unique identification tracking handle.
-   * @param {UpdateProfilePayload} payload - Filtered update fields whitelisted from the API boundary.
-   * @param {DbClient | DbTransaction} client - Execution database link context.
+   * * @param {string} userId - Target unique identification tracking handle UUID string.
+   * @param {Object} payload - Filtered update profile updates map whitelisted from the API boundary.
+   * @param {string} [payload.firstName] - Target replacement parameter value for first name.
+   * @param {string} [payload.lastName] - Target replacement parameter value for last name.
+   * @param {string} [payload.birthDate] - Target replacement parameter value for birth date.
+   * @param {string} [payload.avatarUrl] - Target replacement parameter value for client avatar URL asset.
+   * @param {string} [payload.language] - Target language localization metadata configuration parameters.
+   * @param {string} [payload.theme] - Target interface look and feel UI display token identifier.
+   * @param {string} [payload.timezone] - Target region location offset primitive tracking name.
+   * @param {DbClient | DbTransaction} [client=db] - Execution database connection environment baseline.
    * @returns {Promise<UserRow>} Enriched database mutation row outcome.
    * @throws {NotFoundError} If the targeted user record is non-existent.
    */
@@ -203,6 +221,15 @@ export class IdentityService {
   /**
    * Modifies critical authentication elements after enforcing strict unique collisions gates.
    * Evicts active caching spaces cleanly if structural tokens alter.
+   * * @param {string} userId - Target authoritative unique account identification handle proxy UUID.
+   * @param {Object} payload - Protected credential elements package map context.
+   * @param {string} [payload.email] - Replacement validation target email address string payload.
+   * @param {string} [payload.username] - Replacement system uniqueness profile moniker moniker token.
+   * @param {string} [payload.password] - Replacement raw password cleartext target string.
+   * @param {DbClient | DbTransaction} [client=db] - Execution operational transaction database scope.
+   * @returns {Promise<UserRow>} Upgraded user database persistence record row layout.
+   * @throws {ConflictError} If individual structural changes conflict with alternative user allocations.
+   * @throws {NotFoundError} If target tracking parameters map back onto dead account records.
    */
   static async updateAccountCredentials(
     userId: string,

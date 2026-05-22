@@ -1,31 +1,33 @@
-import { CatalogService } from "../services/catalog.service";
-import { registerTalentSchema } from "../../catalog/request/register-talent.dto";
-import { CatalogSerializer } from "../response/catalog.serializer";
 import { ApiResponse } from "@/shared/http/response";
 import { AuthenticatedNextRequest } from "@/shared/interceptors/auth-guard";
+import { registerTalentSchema } from "../request/register-talent.dto";
+import { CatalogService } from "../services/catalog.service";
+import { CatalogSerializer } from "../response/catalog.serializer";
 
 /**
- * Controller Handler for Talent Conversions.
- * Protected Boundary Handler consuming verified ambient request context states.
+ * Controller Handler for Upgrade Conversions to Talent Storefront Roles.
  */
 export async function registerTalentController(
   req: AuthenticatedNextRequest,
 ): Promise<Response> {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
+
+    // Evaluate incoming specifications against centralized DTO layout schemas
     const validatedData = registerTalentSchema.parse(body);
 
-    const targetUserId = req.user.id;
-
-    // Delegate business execution straight down to the catalog core service layer
-    const rawTalent = await CatalogService.registerAsTalent({
-      userId: targetUserId,
-      ...validatedData,
+    // Invoke state alterations inside the service layer sandbox
+    const talentRecord = await CatalogService.registerNewTalent({
+      userId: req.user.id,
+      bio: validatedData.bio,
+      skills: validatedData.skills,
     });
 
-    const serializedTalent = CatalogSerializer.formatTalent(rawTalent);
+    // Pass row values through the catalog serialization layer formatting layout
+    const serializedResult =
+      CatalogSerializer.formatTalentProfile(talentRecord);
 
-    return ApiResponse.success(serializedTalent, 201);
+    return ApiResponse.success(serializedResult, 201);
   } catch (error) {
     return ApiResponse.handle(error);
   }

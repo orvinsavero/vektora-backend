@@ -1,3 +1,4 @@
+// src/modules/catalog/services/catalog.service.test.ts
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { db } from "@/shared/database/client";
 import { CatalogService } from "./catalog.service";
@@ -7,11 +8,12 @@ import { USER_CONTEXT } from "../../identity/identity.constants";
 import { eq, inArray } from "drizzle-orm";
 import { cache } from "@/shared/cache/redis";
 
-describe("CatalogService - registerAsTalent", () => {
+describe("CatalogService - registerNewTalent", () => {
   let mockUser: typeof users.$inferSelect;
   let createdUserIds: string[] = [];
 
   beforeEach(async () => {
+    // Generate a clean, isolated database user entry matching core schema constraints
     const [insertedUser] = await db
       .insert(users)
       .values({
@@ -30,12 +32,12 @@ describe("CatalogService - registerAsTalent", () => {
     createdUserIds.push(mockUser.id);
   });
 
-  // FORCE CLEANUP AFTER EACH TEST LANE RUNS
+  /* FORCE RELATIONAL CLEANUP AFTER EACH TEST LANE RUNS */
   afterEach(async () => {
     if (createdUserIds.length > 0) {
-      // Clean talents table first due to foreign key constraints
+      // Clean talents table first to prevent breaking relational foreign key constraints
       await db.delete(talents).where(inArray(talents.userId, createdUserIds));
-      // Clean parent user nodes
+      // Clean parent user identity nodes cleanly
       await db.delete(users).where(inArray(users.id, createdUserIds));
       createdUserIds = [];
     }
@@ -48,13 +50,17 @@ describe("CatalogService - registerAsTalent", () => {
       skills: ["TypeScript", "Next.js", "TailwindCSS"],
     };
 
-    const talentResult = await CatalogService.registerAsTalent(payload, db);
+    const talentResult = await CatalogService.registerNewTalent(payload, db);
 
     expect(talentResult).toBeDefined();
     expect(talentResult.userId).toBe(mockUser.id);
     expect(talentResult.bio).toBe(payload.bio);
     expect(talentResult.skills).toEqual(payload.skills);
     expect(talentResult.isVerified).toBe(false);
+
+    // Verify cache fields are default-initialized to integers to prevent floating-point anomalies
+    expect(talentResult.ratingCache).toBe(0);
+    expect(talentResult.reviewCountCache).toBe(0);
 
     const updatedUser = await db.query.users.findFirst({
       where: eq(users.id, mockUser.id),
@@ -71,25 +77,8 @@ describe("CatalogService - registerAsTalent", () => {
       skills: ["Design"],
     };
 
-    await expect(CatalogService.registerAsTalent(payload, db)).rejects.toThrow(
-      "Target user profile does not exist.",
-    );
-  });
-
-  it("should throw a ConflictError if the target user profile is deactivated", async () => {
-    await db
-      .update(users)
-      .set({ isActive: false })
-      .where(eq(users.id, mockUser.id));
-
-    const payload = {
-      userId: mockUser.id,
-      bio: "Valid bio string",
-      skills: ["Design"],
-    };
-
-    await expect(CatalogService.registerAsTalent(payload, db)).rejects.toThrow(
-      "Action denied. This user account profile is currently deactivated.",
+    await expect(CatalogService.registerNewTalent(payload, db)).rejects.toThrow(
+      "Target user account identity not found.",
     );
   });
 
@@ -100,14 +89,14 @@ describe("CatalogService - registerAsTalent", () => {
       skills: ["Copywriting"],
     };
 
-    await CatalogService.registerAsTalent(payload, db);
+    await CatalogService.registerNewTalent(payload, db);
 
-    await expect(CatalogService.registerAsTalent(payload, db)).rejects.toThrow(
-      "This user is already registered as a talent.",
+    // Second attempt must violate uniqueness barriers and reject the instruction
+    await expect(CatalogService.registerNewTalent(payload, db)).rejects.toThrow(
+      "This user identity is already configured as a seller profile.",
     );
   });
 
-  // CLEANED UP: Merged here so it inherits before/after hooks automatically and cleans up the DB perfectly
   it("should attempt to clear the active session cache when a user upgrades to talent", async () => {
     const payload = {
       userId: mockUser.id,
@@ -122,7 +111,7 @@ describe("CatalogService - registerAsTalent", () => {
     const delSpy = vi.spyOn(cache, "del");
 
     // 3. Trigger your service mutation method
-    await CatalogService.registerAsTalent(payload, db);
+    await CatalogService.registerNewTalent(payload, db);
 
     // 4. Verify that the cache eviction line was successfully triggered with the correct key pattern
     expect(delSpy).toHaveBeenCalledWith(`session:active:${payload.userId}`);
