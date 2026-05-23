@@ -9,6 +9,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "dotenv -e .env -- drizzle-kit generate",
     "db:push": "dotenv -e .env -- drizzle-kit push",
+    "db:seed": "dotenv -e .env -- tsx src/shared/database/seed.ts",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -1,12 +1,13 @@
 // src/modules/catalog/services/catalog.service.test.ts
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
-import { db } from "@/shared/database/client";
-import { CatalogService } from "./catalog.service";
-import { users } from "../../identity/identity.schema";
-import { talents } from "../catalog.schema";
-import { USER_CONTEXT } from "../../identity/identity.constants";
 import { eq, inArray } from "drizzle-orm";
 import { cache } from "@/shared/cache/redis";
+import { db } from "@/shared/database/client";
+import { USER_CONTEXT } from "../../identity/identity.constants";
+import { CATALOG_CACHE } from "../catalog.constants";
+import { CatalogService } from "./catalog.service";
+import { users } from "../../identity/identity.schema";
+import { talents, categories } from "../catalog.schema";
 
 describe("CatalogService Integration Tests", () => {
   let mockUser: typeof users.$inferSelect;
@@ -226,6 +227,81 @@ describe("CatalogService Integration Tests", () => {
       await expect(
         CatalogService.updateTalentProfile(missingId, { bio: "New text." }, db),
       ).rejects.toThrow("Target marketplace talent profile does not exist.");
+    });
+  });
+
+  describe("CatalogService Category Retrieval Integration Tests", () => {
+    let seededCategoryIds: string[] = [];
+
+    beforeEach(async () => {
+      // Inject two hierarchical items matching database layout rules
+      const [parent] = await db
+        .insert(categories)
+        .values({
+          name: `Design & Media ${crypto.randomUUID().substring(0, 4)}`,
+          slug: `design-media-${crypto.randomUUID().substring(0, 4)}`,
+          parentId: null,
+          isActive: true,
+        })
+        .returning();
+
+      const [subClass] = await db
+        .insert(categories)
+        .values({
+          name: `3D Generation ${crypto.randomUUID().substring(0, 4)}`,
+          slug: `3d-generation-${crypto.randomUUID().substring(0, 4)}`,
+          parentId: parent.id,
+          isActive: true,
+        })
+        .returning();
+
+      seededCategoryIds.push(parent.id, subClass.id);
+    });
+
+    afterEach(async () => {
+      if (seededCategoryIds.length > 0) {
+        await db
+          .delete(categories)
+          .where(inArray(categories.id, seededCategoryIds));
+        seededCategoryIds = [];
+      }
+      vi.restoreAllMocks();
+    });
+
+    it("should look up active flat records straight from DB on cache miss and write to cache", async () => {
+      (cache as any).isOpen = true;
+      const setSpy = vi.spyOn(cache, "set");
+
+      const data = await CatalogService.getAllCategories(db);
+
+      expect(data.length).toBeGreaterThanOrEqual(2);
+      expect(setSpy).toHaveBeenCalledWith(
+        CATALOG_CACHE.keys.categoriesAll,
+        expect.any(String),
+        { EX: CATALOG_CACHE.ttl },
+      );
+      (cache as any).isOpen = false;
+    });
+
+    it("should completely step around DB lookup if a valid cached string exists inside Redis memory", async () => {
+      (cache as any).isOpen = true;
+      const mockPayload = [
+        {
+          id: "fake-id",
+          name: "Mock Cat",
+          slug: "mock-cat",
+          parentId: null,
+          isActive: true,
+        },
+      ];
+
+      vi.spyOn(cache, "get").mockResolvedValue(JSON.stringify(mockPayload));
+
+      // Supply a broken db client reference. If the system hits DB, compilation crashes.
+      const result = await CatalogService.getAllCategories({} as any);
+
+      expect(result).toEqual(mockPayload);
+      (cache as any).isOpen = false;
     });
   });
 });

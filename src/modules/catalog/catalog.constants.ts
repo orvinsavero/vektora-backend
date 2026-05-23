@@ -14,3 +14,13 @@ export const CATALOG_LIMITS = {
     itemMax: 50,
   },
 } as const;
+
+/**
+ * Shared Architectural Caching TTL & Key Namespaces for the Catalog Domain.
+ */
+export const CATALOG_CACHE = {
+  keys: {
+    categoriesAll: "catalog:categories:all",
+  },
+  ttl: 1800, // 30-minute storage life window for static lists
+} as const;

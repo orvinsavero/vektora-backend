@@ -134,4 +134,14 @@ export const API_ROUTES: RouteDefinition[] = [
       "Accepts partial modifications for professional biographies and skill tag matrices, stripping unauthorized column parameters.",
     isProtected: true,
   },
+  {
+    method: "GET",
+    version: "v1",
+    module: "Catalog",
+    path: "/api/catalog/categories",
+    summary: "List all active marketplace categories",
+    description:
+      "Fetches an unprivileged flat array of valid category entries containing IDs, names, slugs, and hierarchical parent relationships.",
+    isProtected: false,
+  },
 ];

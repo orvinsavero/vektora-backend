@@ -1,11 +1,13 @@
 // src/modules/catalog/services/catalog.service.ts
 import { db as defaultDb } from "@/shared/database/client";
-import { talents } from "../catalog.schema";
+import { CATALOG_CACHE } from "../catalog.constants";
+import { categories, talents } from "../catalog.schema";
 import { users } from "../../identity/identity.schema";
 import { UpdateTalentProfilePayload } from "../request/update-talent.dto";
 import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
 import { eq } from "drizzle-orm";
 import { cache } from "@/shared/cache/redis";
+import { logger } from "@/shared/telemetry/logger";
 
 type DatabaseClient = typeof defaultDb;
 type RegisterTalentInput = {
@@ -167,5 +169,55 @@ export class CatalogService {
     }
 
     return updatedTalent;
+  }
+
+  /**
+   * Resolves a flat array containing all active marketplace categories.
+   * Leverages an asynchronous cache-aside mechanism to reduce primary database execution loads.
+   *
+   * @param {DatabaseClient} [db=defaultDb] - Relational connection driver instance context.
+   * @returns {Promise<typeof categories.$inferSelect[]>} Array of raw category persistence rows.
+   */
+  static async getAllCategories(db: DatabaseClient = defaultDb) {
+    const cacheKey = CATALOG_CACHE.keys.categoriesAll;
+
+    // 1. Fast-Path: Safely evaluate memory state inside the operational Redis container
+    if (cache.isOpen) {
+      try {
+        const cachedRawData = await cache.get(cacheKey);
+        if (cachedRawData) {
+          return JSON.parse(cachedRawData);
+        }
+      } catch (cacheError) {
+        // Fail-open gracefully to preserve system uptime if Redis drops packets
+        logger.warn(
+          { err: cacheError },
+          "CATALOG SERVICE CACHE WARNING: Failed reading category list from Redis.",
+        );
+      }
+    }
+
+    // 2. Cache-Miss: Fetch flat records from PostgreSQL, filtered by active flag status
+    const liveCategories = await db
+      .select()
+      .from(categories)
+      .where(eq(categories.isActive, true))
+      .orderBy(categories.name);
+
+    // 3. Populate internal memory cache back asynchronously to preserve low network latency
+    if (cache.isOpen && liveCategories.length > 0) {
+      cache
+        .set(cacheKey, JSON.stringify(liveCategories), {
+          EX: CATALOG_CACHE.ttl,
+        })
+        .catch((writeError) => {
+          logger.error(
+            { err: writeError },
+            "CATALOG SERVICE CACHE ERROR: Failed writing category list matrix to Redis.",
+          );
+        });
+    }
+
+    return liveCategories;
   }
 }
