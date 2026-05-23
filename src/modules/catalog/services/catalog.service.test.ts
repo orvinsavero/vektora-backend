@@ -304,4 +304,111 @@ describe("CatalogService Integration Tests", () => {
       (cache as any).isOpen = false;
     });
   });
+
+  describe("createPortfolio", () => {
+    let activeTalentUser: typeof users.$inferSelect;
+
+    beforeEach(async () => {
+      // 1. Create a fresh, clean base user account
+      const [insertedUser] = await db
+        .insert(users)
+        .values({
+          email: `portfolio-creator-${crypto.randomUUID()}@marketplace.com`,
+          username: `creator_${crypto.randomUUID().substring(0, 8)}`,
+          passwordHash: "argon2id_mock_hash_string",
+          firstName: "Creative",
+          lastName: "Individual",
+          birthDate: "1990-01-01",
+          currentContext: USER_CONTEXT.USER,
+          isActive: true,
+        })
+        .returning();
+
+      // 2. Elevate that account into an active marketplace seller storefront
+      await db.insert(talents).values({
+        userId: insertedUser.id,
+        bio: "Authorized creative designer profile context.",
+        skills: ["Photoshop", "Midjourney"],
+        isVerified: false,
+      });
+
+      activeTalentUser = insertedUser;
+      createdUserIds.push(activeTalentUser.id); // Triggers automated teardown cleanup on complete
+    });
+
+    it("should successfully build a text-only portfolio project container block when attachments are omitted", async () => {
+      const inputPayload = {
+        talentId: activeTalentUser.id,
+        title: "Minimalist Vector Branding Package",
+        description:
+          "Pure typography layout guidelines for a corporate client identity module.",
+        externalLink: "https://behance.net/branding-minimal",
+        attachments: [],
+      };
+
+      const result = await CatalogService.createPortfolio(inputPayload, db);
+
+      expect(result).toBeDefined();
+      expect(result.id).toBeDefined();
+      expect(result.talentId).toBe(activeTalentUser.id);
+      expect(result.title).toBe(inputPayload.title);
+      expect(result.description).toBe(inputPayload.description);
+      expect(result.externalLink).toBe(inputPayload.externalLink);
+      expect(result.attachments).toEqual([]);
+    });
+
+    it("should process atomic transactions, stitch nested attachments collections arrays, and stamp zero-indexed sortOrder weights", async () => {
+      const inputPayload = {
+        talentId: activeTalentUser.id,
+        title: "Immersive 3D Sci-Fi Environment Showcase",
+        description:
+          "High-fidelity production environments mapped inside a sandbox container engine loop.",
+        externalLink: null,
+        attachments: [
+          {
+            mediaUrl: "https://storage.vektora.io/portfolios/scifi-wide.png",
+            mediaType: "IMAGE" as const,
+          },
+          {
+            mediaUrl: "https://storage.vektora.io/portfolios/scifi-detail.png",
+            mediaType: "IMAGE" as const,
+          },
+          {
+            mediaUrl:
+              "https://storage.vektora.io/portfolios/scifi-flythrough.mp4",
+            mediaType: "VIDEO" as const,
+          },
+        ],
+      };
+
+      const result = await CatalogService.createPortfolio(inputPayload, db);
+
+      // Verify parent metadata layer
+      expect(result.title).toBe(inputPayload.title);
+      expect(result.description).toBe(inputPayload.description);
+      expect(result.externalLink).toBeNull();
+
+      // Verify relation mapping data collections layer bounds
+      expect(result.attachments).toHaveLength(3);
+
+      // Validate that sequential array items precisely absorb their computed sorting weights
+      expect(result.attachments[0]).toMatchObject({
+        mediaUrl: "https://storage.vektora.io/portfolios/scifi-wide.png",
+        mediaType: "IMAGE",
+        sortOrder: 0, // Zero-indexed first slot
+      });
+
+      expect(result.attachments[1]).toMatchObject({
+        mediaUrl: "https://storage.vektora.io/portfolios/scifi-detail.png",
+        mediaType: "IMAGE",
+        sortOrder: 1, // Second slot
+      });
+
+      expect(result.attachments[2]).toMatchObject({
+        mediaUrl: "https://storage.vektora.io/portfolios/scifi-flythrough.mp4",
+        mediaType: "VIDEO",
+        sortOrder: 2, // Third slot
+      });
+    });
+  });
 });

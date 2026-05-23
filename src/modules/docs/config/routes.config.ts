@@ -144,4 +144,14 @@ export const API_ROUTES: RouteDefinition[] = [
       "Fetches an unprivileged flat array of valid category entries containing IDs, names, slugs, and hierarchical parent relationships.",
     isProtected: false,
   },
+  {
+    method: "POST",
+    version: "v1",
+    module: "Catalog",
+    path: "/api/catalog/portfolio",
+    summary: "Publish a new creative portfolio project entry",
+    description:
+      "Enables active marketplace sellers to map professional text context records joined with arrays of visual carousel slide items strings up into atomic database rows.",
+    isProtected: true,
+  },
 ];

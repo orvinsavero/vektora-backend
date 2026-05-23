@@ -10,3 +10,4 @@ export { getTalentController } from "./controllers/get-talent";
 export { getSelfTalentController } from "./controllers/get-self-talent";
 export { updateTalentProfileController } from "./controllers/update-talent";
 export { getCategoriesController } from "./controllers/get-categories";
+export { createPortfolioController } from "./controllers/create-portfolio";

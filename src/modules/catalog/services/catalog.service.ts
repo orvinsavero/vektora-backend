@@ -1,9 +1,15 @@
 // src/modules/catalog/services/catalog.service.ts
 import { db as defaultDb } from "@/shared/database/client";
 import { CATALOG_CACHE } from "../catalog.constants";
-import { categories, talents } from "../catalog.schema";
+import {
+  categories,
+  talents,
+  portfolios,
+  portfolioAttachments,
+} from "../catalog.schema";
 import { users } from "../../identity/identity.schema";
 import { UpdateTalentProfilePayload } from "../request/update-talent.dto";
+import { CreatePortfolioPayload } from "../request/create-portfolio.dto";
 import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
 import { eq } from "drizzle-orm";
 import { cache } from "@/shared/cache/redis";
@@ -219,5 +225,60 @@ export class CatalogService {
     }
 
     return liveCategories;
+  }
+
+  /**
+   * provisions a new project showcase entry mapped onto a talent's seller profile workspace.
+   * Processes nested attachment loops inside an atomic database transaction.
+   *
+   * @param {CreatePortfolioPayload} input - Sanitized application input package context metadata.
+   * @param {DatabaseClient} [db=defaultDb] - Core database proxy connection instance lane.
+   * @returns {Promise<any>} Materialized parent portfolio record structure.
+   */
+  static async createPortfolio(
+    input: CreatePortfolioPayload,
+    db: DatabaseClient = defaultDb,
+  ) {
+    return await db.transaction(async (tx) => {
+      // 1. Commit the core project context row fields cleanly
+      const [newPortfolio] = await tx
+        .insert(portfolios)
+        .values({
+          talentId: input.talentId, // references users.id via foreign keys cascade maps
+          title: input.title,
+          description: input.description,
+          externalLink: input.externalLink,
+        })
+        .returning();
+
+      // 2. Short-circuit if caller did not provide any visual media items arrays
+      if (!input.attachments || input.attachments.length === 0) {
+        return {
+          ...newPortfolio,
+          attachments: [],
+        };
+      }
+
+      // 3. Transform client array into database column parameters with incremental zero-indexed sortOrder tracks
+      const operationalAttachmentsPayload = input.attachments.map(
+        (item, index) => ({
+          portfolioId: newPortfolio.id,
+          mediaUrl: item.mediaUrl,
+          mediaType: item.mediaType,
+          sortOrder: index, // Guarantees consistent carousel slider presentation on client screens
+        }),
+      );
+
+      // 4. Batch inject rows inside the single transaction window loop
+      const insertedAttachments = await tx
+        .insert(portfolioAttachments)
+        .values(operationalAttachmentsPayload)
+        .returning();
+
+      return {
+        ...newPortfolio,
+        attachments: insertedAttachments,
+      };
+    });
   }
 }

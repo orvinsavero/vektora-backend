@@ -13,6 +13,13 @@ export const CATALOG_LIMITS = {
     itemMin: 1,
     itemMax: 50,
   },
+  portfolio: {
+    title: { min: 3, max: 255 },
+    description: { max: 5000 },
+    externalLink: { max: 500 },
+    attachments: { max: 5 },
+    mediaUrl: { max: 500 },
+  },
 } as const;
 
 /**
