@@ -23,6 +23,12 @@ export const CATALOG_LIMITS = {
 } as const;
 
 /**
+ * Whitelisted media types permissible for portfolio uploads.
+ * Deep frozen to satisfy compile-time Zod enum tuple constraints natively.
+ */
+export const ALLOWED_MEDIA_TYPES = ["IMAGE", "VIDEO", "DOCUMENT"] as const;
+
+/**
  * Shared Architectural Caching TTL & Key Namespaces for the Catalog Domain.
  */
 export const CATALOG_CACHE = {

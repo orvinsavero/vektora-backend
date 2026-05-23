@@ -154,4 +154,14 @@ export const API_ROUTES: RouteDefinition[] = [
       "Enables active marketplace sellers to map professional text context records joined with arrays of visual carousel slide items strings up into atomic database rows.",
     isProtected: true,
   },
+  {
+    method: "PATCH",
+    version: "v1",
+    module: "Catalog",
+    path: "/api/catalog/portfolio/[id]",
+    summary: "Modify an existing portfolio project entry",
+    description:
+      "Accepts partial optional updates, evaluates explicit profile ownership constraints, purges obsolete child attachments records collections, and re-inserts updated asset array sequences cleanly.",
+    isProtected: true,
+  },
 ];

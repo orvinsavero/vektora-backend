@@ -1,4 +1,3 @@
-// src/modules/catalog/request/update-talent-profile.dto.ts
 import { z } from "zod";
 import { CATALOG_LIMITS } from "../catalog.constants";
 

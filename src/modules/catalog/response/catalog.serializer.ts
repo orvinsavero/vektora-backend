@@ -1,9 +1,11 @@
 // src/modules/catalog/response/catalog.serializer.ts
-import { talents } from "../catalog.schema";
+import { portfolioAttachments, portfolios, talents } from "../catalog.schema";
 import { users } from "../../identity/identity.schema";
 
 type TalentRow = typeof talents.$inferSelect;
 type UserRow = typeof users.$inferSelect;
+type PortfolioRow = typeof portfolios.$inferSelect;
+type PortfolioAttachmentRow = typeof portfolioAttachments.$inferSelect;
 
 /**
  * Combined Public Data Contract representing a completely hydrated seller presence.
@@ -32,6 +34,20 @@ export interface SerializedTalentResponse {
   rating: number;
   reviewCount: number;
   createdAt: string;
+}
+export interface SerializedPortfolioResponse {
+  id: string;
+  talentId: string;
+  title: string;
+  description: string | null;
+  externalLink: string | null;
+  createdAt: string;
+  attachments: {
+    id: string;
+    mediaUrl: string;
+    mediaType: string;
+    sortOrder: number;
+  }[];
 }
 
 export class CatalogSerializer {
@@ -82,5 +98,45 @@ export class CatalogSerializer {
       reviewCount: talent.reviewCountCache,
       joinedAt: talent.createdAt.toISOString(),
     };
+  }
+
+  /**
+   * Transmutes composite parent-child portfolio rows into a strict, sanitized public JSON wire contract.
+   * Unified representation for: POST /api/catalog/portfolio, PATCH /api/catalog/portfolio/[id], and future GET arrays.
+   *
+   * @param {PortfolioRow} portfolio - Core parent project row selection.
+   * @param {PortfolioAttachmentRow[]} attachments - Linked multi-media array rows selection.
+   * @returns {SerializedPortfolioResponse} Sanitized, frontend-ready visualization schema.
+   */
+  static formatPortfolio(
+    portfolio: PortfolioRow,
+    attachments: PortfolioAttachmentRow[] = [],
+  ): SerializedPortfolioResponse {
+    return {
+      id: portfolio.id,
+      talentId: portfolio.talentId,
+      title: portfolio.title,
+      description: portfolio.description,
+      externalLink: portfolio.externalLink,
+      createdAt: portfolio.createdAt.toISOString(),
+      attachments: attachments.map((att) => ({
+        id: att.id,
+        mediaUrl: att.mediaUrl,
+        mediaType: att.mediaType,
+        sortOrder: att.sortOrder,
+      })),
+    };
+  }
+
+  /**
+   * Helper utility to process batch list selections for public collection endpoints.
+   * Used for upcoming feature: GET /api/catalog/talent/[id]/portfolios
+   */
+  static formatPortfolioList(
+    items: { portfolio: PortfolioRow; attachments: PortfolioAttachmentRow[] }[],
+  ): SerializedPortfolioResponse[] {
+    return items.map((item) =>
+      this.formatPortfolio(item.portfolio, item.attachments),
+    );
   }
 }

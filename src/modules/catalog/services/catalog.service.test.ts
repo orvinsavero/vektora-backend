@@ -411,4 +411,111 @@ describe("CatalogService Integration Tests", () => {
       });
     });
   });
+
+  describe("updatePortfolio", () => {
+    let creativeUser: typeof users.$inferSelect;
+    let baselinePortfolio: any;
+
+    beforeEach(async () => {
+      // 1. Seed base credentials user account profile
+      const [insertedUser] = await db
+        .insert(users)
+        .values({
+          email: `portfolio-updater-${crypto.randomUUID()}@marketplace.com`,
+          username: `updater_${crypto.randomUUID().substring(0, 8)}`,
+          passwordHash: "argon2id_mock_hash_string",
+          birthDate: "1992-02-02",
+          currentContext: USER_CONTEXT.TALENT,
+          isActive: true,
+        })
+        .returning();
+
+      creativeUser = insertedUser;
+      createdUserIds.push(creativeUser.id);
+
+      // FIX: Manually seed the nested target storefront profile inside the parent table setup first
+      await db.insert(talents).values({
+        userId: creativeUser.id,
+        bio: "Original talent bio context setup.",
+        skills: ["TypeScript"],
+        isVerified: false,
+      });
+
+      // 2. Initialize fresh showcase entry tracking bounds
+      baselinePortfolio = await CatalogService.createPortfolio(
+        {
+          talentId: creativeUser.id,
+          title: "Original Project Title",
+          description: "Original Description Text Block Context.",
+          externalLink: null,
+          attachments: [
+            {
+              mediaUrl: "https://storage.vektora.io/assets/old-1.png",
+              mediaType: "IMAGE",
+            },
+          ],
+        },
+        db,
+      );
+    });
+
+    it("should successfully adjust text parameters while keeping historical attachments intact if omitted", async () => {
+      const updatesPayload = {
+        portfolioId: baselinePortfolio.id,
+        talentId: creativeUser.id,
+        title: "Altered Project Title Title Name",
+      };
+
+      const result = await CatalogService.updatePortfolio(updatesPayload, db);
+
+      expect(result.title).toBe(updatesPayload.title);
+      expect(result.description).toBe(baselinePortfolio.description); // Maintained unmutated column references
+      expect(result.attachments).toHaveLength(1);
+      expect(result.attachments[0].mediaUrl).toBe(
+        "https://storage.vektora.io/assets/old-1.png",
+      );
+    });
+
+    it("should completely purge old items records arrays and re-apply fresh arrays maps when attachments are modified", async () => {
+      const updatesPayload = {
+        portfolioId: baselinePortfolio.id,
+        talentId: creativeUser.id,
+        attachments: [
+          {
+            mediaUrl: "https://storage.vektora.io/assets/fresh-new-art-1.png",
+            mediaType: "IMAGE" as const,
+          },
+          {
+            mediaUrl: "https://storage.vektora.io/assets/fresh-new-art-2.png",
+            mediaType: "IMAGE" as const,
+          },
+        ],
+      };
+
+      const result = await CatalogService.updatePortfolio(updatesPayload, db);
+
+      expect(result.title).toBe(baselinePortfolio.title);
+      expect(result.attachments).toHaveLength(2);
+      expect(result.attachments[0]).toMatchObject({
+        mediaUrl: "https://storage.vektora.io/assets/fresh-new-art-1.png",
+        sortOrder: 0,
+      });
+      expect(result.attachments[1]).toMatchObject({
+        mediaUrl: "https://storage.vektora.io/assets/fresh-new-art-2.png",
+        sortOrder: 1,
+      });
+    });
+
+    it("should reject operation actions with a NotFoundError if an account tries to alter an un-owned portfolio item", async () => {
+      const hostileHijackPayload = {
+        portfolioId: baselinePortfolio.id,
+        talentId: crypto.randomUUID(), // Completely random fake tracking ID token pointer context
+        title: "Malicious Injection Title Attack Attempt",
+      };
+
+      await expect(
+        CatalogService.updatePortfolio(hostileHijackPayload, db),
+      ).rejects.toThrow();
+    });
+  });
 });

@@ -1,9 +1,9 @@
-// src/modules/catalog/request/create-portfolio.dto.ts
+// src/modules/catalog/request/update-portfolio.dto.ts
 import { z } from "zod";
 import { CATALOG_LIMITS } from "../catalog.constants";
-import { attachmentInputSchema } from "./portfolio-attachments.dto"; // <-- Import shared schema
+import { attachmentInputSchema } from "./portfolio-attachments.dto";
 
-export const createPortfolioSchema = z.object({
+export const updatePortfolioSchema = z.object({
   title: z
     .string()
     .trim()
@@ -14,7 +14,8 @@ export const createPortfolioSchema = z.object({
     .max(
       CATALOG_LIMITS.portfolio.title.max,
       `Title cannot exceed ${CATALOG_LIMITS.portfolio.title.max} characters.`,
-    ),
+    )
+    .optional(),
   description: z
     .string()
     .trim()
@@ -23,7 +24,7 @@ export const createPortfolioSchema = z.object({
       "Description path is too long.",
     )
     .optional()
-    .transform((val) => val || null),
+    .nullable(),
   externalLink: z
     .string()
     .trim()
@@ -33,19 +34,19 @@ export const createPortfolioSchema = z.object({
       "External reference path is too long.",
     )
     .optional()
-    .transform((val) => val || null),
+    .nullable(),
   attachments: z
-    .array(attachmentInputSchema) // <-- Use shared schema here
+    .array(attachmentInputSchema) // <-- Target shared schema directly
     .max(
       CATALOG_LIMITS.portfolio.attachments.max,
       `Maximum asset capacity capped at ${CATALOG_LIMITS.portfolio.attachments.max} media attachments per project.`,
     )
-    .optional()
-    .default([]),
+    .optional(),
 });
 
-export type CreatePortfolioNetworkInput = z.infer<typeof createPortfolioSchema>;
+export type UpdatePortfolioNetworkInput = z.infer<typeof updatePortfolioSchema>;
 
-export interface CreatePortfolioPayload extends CreatePortfolioNetworkInput {
+export interface UpdatePortfolioPayload extends UpdatePortfolioNetworkInput {
+  portfolioId: string;
   talentId: string;
 }

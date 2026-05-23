@@ -1,5 +1,8 @@
-// src/modules/catalog/services/catalog.service.ts
+import { eq, and } from "drizzle-orm";
 import { db as defaultDb } from "@/shared/database/client";
+import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
+import { cache } from "@/shared/cache/redis";
+import { logger } from "@/shared/telemetry/logger";
 import { CATALOG_CACHE } from "../catalog.constants";
 import {
   categories,
@@ -10,10 +13,7 @@ import {
 import { users } from "../../identity/identity.schema";
 import { UpdateTalentProfilePayload } from "../request/update-talent.dto";
 import { CreatePortfolioPayload } from "../request/create-portfolio.dto";
-import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
-import { eq } from "drizzle-orm";
-import { cache } from "@/shared/cache/redis";
-import { logger } from "@/shared/telemetry/logger";
+import { UpdatePortfolioPayload } from "../request/update-portfolio.dto";
 
 type DatabaseClient = typeof defaultDb;
 type RegisterTalentInput = {
@@ -277,6 +277,107 @@ export class CatalogService {
 
       return {
         ...newPortfolio,
+        attachments: insertedAttachments,
+      };
+    });
+  }
+
+  /**
+   * Updates an existing portfolio entry after validating ownership constraints.
+   * Leverages a transaction to handle atomic parent edits and child attachment array flushes.
+   *
+   * @param {UpdatePortfolioPayload} input - Sanitized application input context layout maps.
+   * @param {DatabaseClient} [db=defaultDb] - Execution operational database connection baseline.
+   * @returns {Promise<any>} The re-hydrated updated portfolio composite data structure object.
+   * @throws {NotFoundError} If the target portfolio identifier is missing or doesn't belong to the talent.
+   */
+  static async updatePortfolio(
+    input: UpdatePortfolioPayload,
+    db: DatabaseClient = defaultDb,
+  ) {
+    return await db.transaction(async (tx) => {
+      const updateData: Record<string, any> = {};
+      if (input.title !== undefined) updateData.title = input.title;
+      if (input.description !== undefined)
+        updateData.description = input.description;
+      if (input.externalLink !== undefined)
+        updateData.externalLink = input.externalLink;
+
+      let updatedPortfolio: typeof portfolios.$inferSelect | undefined;
+
+      // FIX: Only run the database update statement if there are columns to actually change
+      if (Object.keys(updateData).length > 0) {
+        const [record] = await tx
+          .update(portfolios)
+          .set(updateData)
+          .where(
+            and(
+              eq(portfolios.id, input.portfolioId),
+              eq(portfolios.talentId, input.talentId),
+            ),
+          )
+          .returning();
+
+        updatedPortfolio = record;
+      } else {
+        // If no parent columns changed, just fetch the existing record to verify ownership and identity
+        updatedPortfolio = await tx.query.portfolios.findFirst({
+          where: and(
+            eq(portfolios.id, input.portfolioId),
+            eq(portfolios.talentId, input.talentId),
+          ),
+        });
+      }
+
+      if (!updatedPortfolio) {
+        throw new NotFoundError(
+          "Target portfolio item profile does not exist or access is denied.",
+        );
+      }
+
+      // 2. Cascade array syncing loop: If attachment field key is omitted, bypass flushing child collections
+      if (input.attachments === undefined) {
+        const currentAttachments = await tx
+          .select()
+          .from(portfolioAttachments)
+          .where(eq(portfolioAttachments.portfolioId, input.portfolioId))
+          .orderBy(portfolioAttachments.sortOrder);
+
+        return {
+          ...updatedPortfolio,
+          attachments: currentAttachments,
+        };
+      }
+
+      // 3. Purge existing attachments to reset historical layout records
+      await tx
+        .delete(portfolioAttachments)
+        .where(eq(portfolioAttachments.portfolioId, input.portfolioId));
+
+      if (input.attachments.length === 0) {
+        return {
+          ...updatedPortfolio,
+          attachments: [],
+        };
+      }
+
+      // 4. Transform and rebuild new attachment items arrays with freshly indexed sorting criteria weights
+      const operationalAttachmentsPayload = input.attachments.map(
+        (item, index) => ({
+          portfolioId: updatedPortfolio!.id,
+          mediaUrl: item.mediaUrl,
+          mediaType: item.mediaType,
+          sortOrder: index,
+        }),
+      );
+
+      const insertedAttachments = await tx
+        .insert(portfolioAttachments)
+        .values(operationalAttachmentsPayload)
+        .returning();
+
+      return {
+        ...updatedPortfolio,
         attachments: insertedAttachments,
       };
     });
