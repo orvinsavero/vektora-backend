@@ -19,6 +19,7 @@ export const CATALOG_LIMITS = {
     externalLink: { max: 500 },
     attachments: { max: 5 },
     mediaUrl: { max: 500 },
+    maxEntries: 5,
   },
 } as const;
 

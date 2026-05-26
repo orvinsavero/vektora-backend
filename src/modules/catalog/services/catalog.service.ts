@@ -1,9 +1,9 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import { db as defaultDb } from "@/shared/database/client";
 import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
 import { cache } from "@/shared/cache/redis";
 import { logger } from "@/shared/telemetry/logger";
-import { CATALOG_CACHE } from "../catalog.constants";
+import { CATALOG_CACHE, CATALOG_LIMITS } from "../catalog.constants";
 import {
   categories,
   talents,
@@ -240,18 +240,32 @@ export class CatalogService {
     db: DatabaseClient = defaultDb,
   ) {
     return await db.transaction(async (tx) => {
-      // 1. Commit the core project context row fields cleanly
+      // 1. Guardrail Check: Aggregate total existing entries for this specific talent profile
+      const [existingCountRow] = await tx
+        .select({ value: count() })
+        .from(portfolios)
+        .where(eq(portfolios.talentId, input.talentId));
+
+      const totalEntries = existingCountRow?.value ?? 0;
+
+      if (totalEntries >= CATALOG_LIMITS.portfolio.maxEntries) {
+        throw new ConflictError(
+          `Portfolio limit reached. Maximum allowed is ${CATALOG_LIMITS.portfolio.maxEntries} showcase entries per talent profile.`,
+        );
+      }
+
+      // 2. Commit the core project context row fields cleanly
       const [newPortfolio] = await tx
         .insert(portfolios)
         .values({
-          talentId: input.talentId, // references users.id via foreign keys cascade maps
+          talentId: input.talentId,
           title: input.title,
           description: input.description,
           externalLink: input.externalLink,
         })
         .returning();
 
-      // 2. Short-circuit if caller did not provide any visual media items arrays
+      // 3. Short-circuit if caller did not provide any visual media items arrays
       if (!input.attachments || input.attachments.length === 0) {
         return {
           ...newPortfolio,
@@ -259,17 +273,17 @@ export class CatalogService {
         };
       }
 
-      // 3. Transform client array into database column parameters with incremental zero-indexed sortOrder tracks
+      // 4. Transform client array into database column parameters with incremental zero-indexed sortOrder tracks
       const operationalAttachmentsPayload = input.attachments.map(
         (item, index) => ({
           portfolioId: newPortfolio.id,
           mediaUrl: item.mediaUrl,
           mediaType: item.mediaType,
-          sortOrder: index, // Guarantees consistent carousel slider presentation on client screens
+          sortOrder: index,
         }),
       );
 
-      // 4. Batch inject rows inside the single transaction window loop
+      // 5. Batch inject rows inside the single transaction window loop
       const insertedAttachments = await tx
         .insert(portfolioAttachments)
         .values(operationalAttachmentsPayload)

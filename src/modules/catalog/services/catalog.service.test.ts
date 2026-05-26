@@ -410,6 +410,34 @@ describe("CatalogService Integration Tests", () => {
         sortOrder: 2, // Third slot
       });
     });
+
+    it("should throw a ConflictError when trying to exceed the maximum 5 portfolio showcase entries limit", async () => {
+      const basePayload = {
+        talentId: activeTalentUser.id,
+        title: "Test Project Entry",
+        description: "Mock description path context string.",
+        externalLink: null,
+        attachments: [],
+      };
+
+      // Seed the database up to the max capacity (5 items)
+      for (let i = 0; i < 5; i++) {
+        await CatalogService.createPortfolio(
+          { ...basePayload, title: `Project Title ${i}` },
+          db,
+        );
+      }
+
+      // The 6th entry execution block must violate safety constraints and throw a ConflictError
+      await expect(
+        CatalogService.createPortfolio(
+          { ...basePayload, title: "The Breaking 6th Entry" },
+          db,
+        ),
+      ).rejects.toThrow(
+        "Portfolio limit reached. Maximum allowed is 5 showcase entries per talent profile.",
+      );
+    });
   });
 
   describe("updatePortfolio", () => {
