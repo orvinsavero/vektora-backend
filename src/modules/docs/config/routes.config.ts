@@ -164,4 +164,15 @@ export const API_ROUTES: RouteDefinition[] = [
       "Accepts partial optional updates, evaluates explicit profile ownership constraints, purges obsolete child attachments records collections, and re-inserts updated asset array sequences cleanly.",
     isProtected: true,
   },
+  // Append this block inside the API_ROUTES array layout configuration inside routes.config.ts
+  {
+    method: "DELETE",
+    version: "v1",
+    module: "Catalog",
+    path: "/api/catalog/portfolio/[id]",
+    summary: "Delete an existing portfolio project entry",
+    description:
+      "Evaluates profile ownership constraints, triggers cascading drops across related child media elements, and completely flushes metadata rows from disk space.",
+    isProtected: true,
+  },
 ];

@@ -7,7 +7,12 @@ import { USER_CONTEXT } from "../../identity/identity.constants";
 import { CATALOG_CACHE } from "../catalog.constants";
 import { CatalogService } from "./catalog.service";
 import { users } from "../../identity/identity.schema";
-import { talents, categories } from "../catalog.schema";
+import {
+  talents,
+  categories,
+  portfolios,
+  portfolioAttachments,
+} from "../catalog.schema";
 
 describe("CatalogService Integration Tests", () => {
   let mockUser: typeof users.$inferSelect;
@@ -544,6 +549,90 @@ describe("CatalogService Integration Tests", () => {
       await expect(
         CatalogService.updatePortfolio(hostileHijackPayload, db),
       ).rejects.toThrow();
+    });
+  });
+
+  // Add this block inside describe("CatalogService Integration Tests") inside catalog.service.test.ts
+
+  describe("deletePortfolio", () => {
+    let targetTalentUser: typeof users.$inferSelect;
+    let freshPortfolio: any;
+
+    beforeEach(async () => {
+      const [insertedUser] = await db
+        .insert(users)
+        .values({
+          email: `portfolio-deleter-${crypto.randomUUID()}@marketplace.com`,
+          username: `deleter_${crypto.randomUUID().substring(0, 8)}`,
+          passwordHash: "argon2id_mock_hash_string",
+          birthDate: "1994-04-04",
+          currentContext: USER_CONTEXT.TALENT,
+          isActive: true,
+        })
+        .returning();
+
+      targetTalentUser = insertedUser;
+      createdUserIds.push(targetTalentUser.id);
+
+      await db.insert(talents).values({
+        userId: targetTalentUser.id,
+        bio: "Deleter profile store context tracking.",
+        skills: ["Cleaning"],
+        isVerified: false,
+      });
+
+      freshPortfolio = await CatalogService.createPortfolio(
+        {
+          talentId: targetTalentUser.id,
+          title: "Short-Lived Temporary Masterpiece",
+          description: "To be wiped out shortly via unit testing triggers.",
+          externalLink: null,
+          attachments: [
+            {
+              mediaUrl: "https://storage.vektora.io/assets/doomed-asset.png",
+              mediaType: "IMAGE",
+            },
+          ],
+        },
+        db,
+      );
+    });
+
+    it("should successfully wipe out parent portfolios rows and cascade purge child attachments elements simultaneously", async () => {
+      // 1. Trigger deletion command sequence
+      await CatalogService.deletePortfolio(
+        freshPortfolio.id,
+        targetTalentUser.id,
+        db,
+      );
+
+      // 2. Verify parent portfolio tracking record has ceased to exist
+      const verifiedPortfolioRecord = await db.query.portfolios.findFirst({
+        where: eq(portfolios.id, freshPortfolio.id),
+      });
+      expect(verifiedPortfolioRecord).toBeUndefined();
+
+      // 3. Verify that the on-cascade database rule successfully cleared child attachments rows entirely
+      const verifiedAttachmentsRecords = await db
+        .select()
+        .from(portfolioAttachments)
+        .where(eq(portfolioAttachments.portfolioId, freshPortfolio.id));
+
+      expect(verifiedAttachmentsRecords).toHaveLength(0);
+    });
+
+    it("should reject un-authorized operations with a NotFoundError if a different account tries to delete the asset", async () => {
+      const externalMaliciousActorId = crypto.randomUUID();
+
+      await expect(
+        CatalogService.deletePortfolio(
+          freshPortfolio.id,
+          externalMaliciousActorId,
+          db,
+        ),
+      ).rejects.toThrow(
+        "Target portfolio item profile does not exist or access is denied.",
+      );
     });
   });
 });

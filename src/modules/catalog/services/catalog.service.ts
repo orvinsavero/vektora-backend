@@ -396,4 +396,34 @@ export class CatalogService {
       };
     });
   }
+
+  /**
+   * Destroys an existing portfolio entry along with its cascading media elements
+   * after validating structural ownership constraints.
+   *
+   * @param {string} portfolioId - Target database entry identifier UUID.
+   * @param {string} talentId - Requesting verified talent user context UUID.
+   * @throws {NotFoundError} If the target item does not exist or ownership validation fails.
+   */
+  static async deletePortfolio(
+    portfolioId: string,
+    talentId: string,
+    db: DatabaseClient = defaultDb,
+  ): Promise<void> {
+    const [deletedRecord] = await db
+      .delete(portfolios)
+      .where(
+        and(
+          eq(portfolios.id, portfolioId),
+          eq(portfolios.talentId, talentId), // Strict ownership guardrail
+        ),
+      )
+      .returning();
+
+    if (!deletedRecord) {
+      throw new NotFoundError(
+        "Target portfolio item profile does not exist or access is denied.",
+      );
+    }
+  }
 }

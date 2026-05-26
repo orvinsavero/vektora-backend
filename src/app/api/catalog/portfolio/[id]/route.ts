@@ -1,5 +1,8 @@
 import { NextRequest } from "next/server";
-import { updatePortfolioController } from "@/modules/catalog";
+import {
+  deletePortfolioController,
+  updatePortfolioController,
+} from "@/modules/catalog";
 import { traceRoute } from "@/shared/interceptors/route-handler";
 import { requireTalent } from "@/shared/interceptors/auth-guard";
 
@@ -15,6 +18,20 @@ export const PATCH = traceRoute(
       return updatePortfolioController(authReq, context);
     });
 
+    return authenticatedWorker(req);
+  },
+);
+
+/**
+ * DELETE HTTP Handler for Purging Targeted Portfolio Records.
+ * Capped behind requireTalent authorization security walls.
+ * Maps to: DELETE /api/catalog/portfolio/[id]
+ */
+export const DELETE = traceRoute(
+  async (req: NextRequest, context: any): Promise<Response> => {
+    const authenticatedWorker = requireTalent(async (authReq) => {
+      return deletePortfolioController(authReq, context);
+    });
     return authenticatedWorker(req);
   },
 );
