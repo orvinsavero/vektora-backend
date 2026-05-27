@@ -186,4 +186,14 @@ export const API_ROUTES: RouteDefinition[] = [
       "Fetches an unprivileged, deep-hydrated collection array of creative showcase entries joined with ordered slide media paths.",
     isProtected: false,
   },
+  {
+    method: "GET",
+    version: "v1",
+    module: "Catalog",
+    path: "/api/catalog/portfolio/[id]",
+    summary: "Resolve individual portfolio showcase item details",
+    description:
+      "Fetches a standalone hydrated project summary profile joined with its ordered multimedia carousel asset arrays.",
+    isProtected: false,
+  },
 ];

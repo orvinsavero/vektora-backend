@@ -449,4 +449,35 @@ export class CatalogService {
       orderBy: (portfolios, { desc }) => [desc(portfolios.createdAt)],
     });
   }
+
+  /**
+   * Resolves a single deep-hydrated portfolio project entry by its unique identifier.
+   * Forces child multi-media attachments to return sequentially ordered by sort weights.
+   *
+   * @param {string} portfolioId - Target database entry identifier UUID.
+   * @param {DatabaseClient} [db=defaultDb] - Relational connection proxy client instance.
+   * @returns {Promise<any>} Relational parent row merged with sorted child attachments.
+   * @throws {NotFoundError} If the targeted portfolio record does not exist in database storage.
+   */
+  static async getPortfolioById(
+    portfolioId: string,
+    db: DatabaseClient = defaultDb,
+  ) {
+    const record = await db.query.portfolios.findFirst({
+      where: eq(portfolios.id, portfolioId),
+      with: {
+        attachments: {
+          orderBy: (attachments, { asc }) => [asc(attachments.sortOrder)],
+        },
+      },
+    });
+
+    if (!record) {
+      throw new NotFoundError(
+        "Requested portfolio project showcase item does not exist.",
+      );
+    }
+
+    return record;
+  }
 }

@@ -2,9 +2,23 @@ import { NextRequest } from "next/server";
 import {
   deletePortfolioController,
   updatePortfolioController,
+  getPortfolioController,
 } from "@/modules/catalog";
 import { traceRoute } from "@/shared/interceptors/route-handler";
 import { requireTalent } from "@/shared/interceptors/auth-guard";
+
+/**
+ * Public GET HTTP Handler for Hydrating an Individual Portfolio Showcase Card.
+ * Maps to: GET /api/catalog/portfolio/[id]
+ */
+export const GET = traceRoute(
+  async (
+    req: NextRequest,
+    context: { params: { id: string } },
+  ): Promise<Response> => {
+    return getPortfolioController(req, context);
+  },
+);
 
 /**
  * PATCH HTTP Handler for Mutating Targeted Portfolio Material Elements.

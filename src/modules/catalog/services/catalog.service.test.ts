@@ -712,4 +712,73 @@ describe("CatalogService Integration Tests", () => {
       expect(targetProject.attachments[1].sortOrder).toBe(1);
     });
   });
+
+  describe("getPortfolioById", () => {
+    let mockTalentUser: typeof users.$inferSelect;
+    let targetPortfolio: any;
+
+    beforeEach(async () => {
+      const [insertedUser] = await db
+        .insert(users)
+        .values({
+          email: `portfolio-viewer-${crypto.randomUUID()}@marketplace.com`,
+          username: `viewer_${crypto.randomUUID().substring(0, 8)}`,
+          passwordHash: "argon2id_mock_hash_string",
+          birthDate: "1993-03-03",
+          currentContext: USER_CONTEXT.TALENT,
+          isActive: true,
+        })
+        .returning();
+
+      mockTalentUser = insertedUser;
+      createdUserIds.push(mockTalentUser.id);
+
+      await db.insert(talents).values({
+        userId: mockTalentUser.id,
+        bio: "Individual card reader test setup data profile.",
+        skills: ["Photographer"],
+        isVerified: false,
+      });
+
+      targetPortfolio = await CatalogService.createPortfolio(
+        {
+          talentId: mockTalentUser.id,
+          title: "Deep Relational Discovery Project",
+          description: "Verify atomic extraction paths layer bounds.",
+          externalLink: "https://vektora.io/discover/deep-relational",
+          attachments: [
+            {
+              mediaUrl: "https://storage.vektora.io/assets/main-cover.png",
+              mediaType: "IMAGE",
+            },
+          ],
+        },
+        db,
+      );
+    });
+
+    it("should successfully extract a single deep-hydrated portfolio row matching a valid target identifier", async () => {
+      const result = await CatalogService.getPortfolioById(
+        targetPortfolio.id,
+        db,
+      );
+
+      expect(result).toBeDefined();
+      expect(result.id).toBe(targetPortfolio.id);
+      expect(result.title).toBe("Deep Relational Discovery Project");
+      expect(result.attachments).toHaveLength(1);
+      expect(result.attachments[0].mediaUrl).toBe(
+        "https://storage.vektora.io/assets/main-cover.png",
+      );
+    });
+
+    it("should throw an explicit NotFoundError if requested item primary key tracking UUID does not exist inside storage disk", async () => {
+      const phantomId = crypto.randomUUID();
+      await expect(
+        CatalogService.getPortfolioById(phantomId, db),
+      ).rejects.toThrow(
+        "Requested portfolio project showcase item does not exist.",
+      );
+    });
+  });
 });
