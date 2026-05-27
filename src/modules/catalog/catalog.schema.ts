@@ -1,3 +1,4 @@
+import { relations } from "drizzle-orm";
 import {
   pgSchema,
   uuid,
@@ -149,3 +150,21 @@ export const reviews = catalogSchema.table("reviews", {
   comment: text("comment"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+/**
+ * 9. RELATIONAL GRAPH DECLARATIONS
+ * Configures compile-time and runtime relation mappings for deep-nesting lookups.
+ */
+export const portfoliosRelations = relations(portfolios, ({ many }) => ({
+  attachments: many(portfolioAttachments),
+}));
+
+export const portfolioAttachmentsRelations = relations(
+  portfolioAttachments,
+  ({ one }) => ({
+    portfolio: one(portfolios, {
+      fields: [portfolioAttachments.portfolioId],
+      references: [portfolios.id],
+    }),
+  }),
+);

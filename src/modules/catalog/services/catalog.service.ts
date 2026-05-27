@@ -426,4 +426,27 @@ export class CatalogService {
       );
     }
   }
+
+  /**
+   * Resolves all active portfolio showcase entries assigned to a specific talent account.
+   * Leverages Drizzle Relational API to deep-hydrate nested attachment carousel sliders.
+   *
+   * @param {string} talentId - The unique seller/talent context UUID (users.id tracker).
+   * @param {DatabaseClient} [db=defaultDb] - Relational context engine connection proxy.
+   * @returns {Promise<any[]>} Array of raw parent portfolio models containing child attachment records.
+   */
+  static async getPortfoliosByTalentId(
+    talentId: string,
+    db: DatabaseClient = defaultDb,
+  ) {
+    return await db.query.portfolios.findMany({
+      where: eq(portfolios.talentId, talentId),
+      with: {
+        attachments: {
+          orderBy: (attachments, { asc }) => [asc(attachments.sortOrder)],
+        },
+      },
+      orderBy: (portfolios, { desc }) => [desc(portfolios.createdAt)],
+    });
+  }
 }

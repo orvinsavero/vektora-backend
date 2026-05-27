@@ -635,4 +635,81 @@ describe("CatalogService Integration Tests", () => {
       );
     });
   });
+
+  describe("getPortfoliosByTalentId", () => {
+    let activeSeller: typeof users.$inferSelect;
+
+    beforeEach(async () => {
+      const [insertedUser] = await db
+        .insert(users)
+        .values({
+          email: `portfolio-reader-${crypto.randomUUID()}@marketplace.com`,
+          username: `reader_${crypto.randomUUID().substring(0, 8)}`,
+          passwordHash: "argon2id_mock_hash_string",
+          birthDate: "1991-01-01",
+          currentContext: USER_CONTEXT.TALENT,
+          isActive: true,
+        })
+        .returning();
+
+      activeSeller = insertedUser;
+      createdUserIds.push(activeSeller.id);
+
+      await db.insert(talents).values({
+        userId: activeSeller.id,
+        bio: "Seeded profile reader context.",
+        skills: ["Illustrator"],
+        isVerified: false,
+      });
+    });
+
+    it("should resolve an empty array cleanly if the target talent has published zero showcase project entries", async () => {
+      const result = await CatalogService.getPortfoliosByTalentId(
+        activeSeller.id,
+        db,
+      );
+      expect(result).toEqual([]);
+    });
+
+    it("should successfully return a collection of portfolios deep-hydrated with media items sorted arithmetically", async () => {
+      // 1. Seed a project card entry
+      await CatalogService.createPortfolio(
+        {
+          talentId: activeSeller.id,
+          title: "Relational Mapping Concept Project",
+          description: "Testing nested array hydration logic passes.",
+          externalLink: null,
+          attachments: [
+            {
+              mediaUrl: "https://storage.vektora.io/assets/slide-2.png",
+              mediaType: "IMAGE",
+            },
+            {
+              mediaUrl: "https://storage.vektora.io/assets/slide-1.png",
+              mediaType: "IMAGE",
+            },
+          ],
+        },
+        db,
+      );
+
+      // 2. Fetch data via the read service method
+      const portfoliosCollection = await CatalogService.getPortfoliosByTalentId(
+        activeSeller.id,
+        db,
+      );
+
+      // 3. System Assertions
+      expect(portfoliosCollection).toHaveLength(1);
+      const targetProject = portfoliosCollection[0];
+      expect(targetProject.title).toBe("Relational Mapping Concept Project");
+
+      // Confirm that the relational data declaring block successfully nested child attachments rows
+      expect(targetProject.attachments).toHaveLength(2);
+
+      // Confirm that sortOrder arithmetical asc rules applied cleanly via our schema definitions
+      expect(targetProject.attachments[0].sortOrder).toBe(0);
+      expect(targetProject.attachments[1].sortOrder).toBe(1);
+    });
+  });
 });

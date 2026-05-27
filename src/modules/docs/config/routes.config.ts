@@ -175,4 +175,15 @@ export const API_ROUTES: RouteDefinition[] = [
       "Evaluates profile ownership constraints, triggers cascading drops across related child media elements, and completely flushes metadata rows from disk space.",
     isProtected: true,
   },
+  {
+    method: "GET",
+    version: "v1",
+    module: "Catalog",
+    path: "/api/catalog/talent/portfolios/[id]",
+    summary:
+      "List all public portfolio entries for a specific talent storefront",
+    description:
+      "Fetches an unprivileged, deep-hydrated collection array of creative showcase entries joined with ordered slide media paths.",
+    isProtected: false,
+  },
 ];

@@ -13,3 +13,4 @@ export { getCategoriesController } from "./controllers/get-categories";
 export { createPortfolioController } from "./controllers/create-portfolio";
 export { updatePortfolioController } from "./controllers/update-portfolio";
 export { deletePortfolioController } from "./controllers/delete-portfolio";
+export { getTalentPortfoliosController } from "./controllers/get-talent-portfolios";
