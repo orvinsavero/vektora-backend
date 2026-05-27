@@ -14,9 +14,11 @@ import { requireTalent } from "@/shared/interceptors/auth-guard";
 export const GET = traceRoute(
   async (
     req: NextRequest,
-    context: { params: { id: string } },
+    context: { params: Promise<{ id: string }> },
   ): Promise<Response> => {
-    return getPortfolioController(req, context);
+    const params = await context.params;
+
+    return getPortfolioController(req, { params });
   },
 );
 
@@ -26,10 +28,10 @@ export const GET = traceRoute(
  * Maps to: PATCH /api/catalog/portfolio/[id]
  */
 export const PATCH = traceRoute(
-  async (req: NextRequest, context: any): Promise<Response> => {
-    // Wrap auth check inline so it can preserve lexical scope access to 'context'
+  async (req: NextRequest, context: { params: Promise<{ id: string }> }) => {
+    const params = await context.params;
     const authenticatedWorker = requireTalent(async (authReq) => {
-      return updatePortfolioController(authReq, context);
+      return updatePortfolioController(authReq, { params });
     });
 
     return authenticatedWorker(req);
@@ -42,9 +44,10 @@ export const PATCH = traceRoute(
  * Maps to: DELETE /api/catalog/portfolio/[id]
  */
 export const DELETE = traceRoute(
-  async (req: NextRequest, context: any): Promise<Response> => {
+  async (req: NextRequest, context: { params: Promise<{ id: string }> }) => {
+    const params = await context.params;
     const authenticatedWorker = requireTalent(async (authReq) => {
-      return deletePortfolioController(authReq, context);
+      return deletePortfolioController(authReq, { params });
     });
     return authenticatedWorker(req);
   },

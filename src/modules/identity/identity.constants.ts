@@ -1,4 +1,4 @@
-import { UpdateProfilePayload } from "./request/update-profile.dto";
+import { UpdateProfilePayload } from "./_shared/request/update-profile.dto";
 /**
  * Structural Field Sizing and Array Length Constraints.
  * Serves as the centralized registry for Zod perimeter schemas and Drizzle database column definitions.

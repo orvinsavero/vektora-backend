@@ -1,7 +1,5 @@
 // src/modules/docs/config/routes.config.ts
 import { z } from "zod";
-import { registerUserSchema, loginSchema } from "@/modules/identity/request";
-import { registerTalentSchema } from "@/modules/catalog/request";
 
 // 1. Enforce strict token structures for HTTP parameters
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
@@ -40,7 +38,6 @@ export const API_ROUTES: RouteDefinition[] = [
     description:
       "Validates incoming field constraints, intercepts email duplication parameters, hashes passwords, and persists the identity record.",
     isProtected: false,
-    requestBody: registerUserSchema,
   },
   {
     method: "POST",
@@ -51,7 +48,6 @@ export const API_ROUTES: RouteDefinition[] = [
     description:
       "Upgrades an authenticated user to a talent profile status and mounts portfolio/skill criteria within an atomic database transaction window.",
     isProtected: true,
-    requestBody: registerTalentSchema,
   },
   {
     method: "POST",
@@ -62,7 +58,6 @@ export const API_ROUTES: RouteDefinition[] = [
     description:
       "Verifies incoming handle credentials against system hash signatures, generating short-lived access authorization and setting a secure session cookie.",
     isProtected: false,
-    requestBody: loginSchema,
   },
   {
     method: "GET",

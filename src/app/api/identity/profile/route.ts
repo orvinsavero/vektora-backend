@@ -1,5 +1,5 @@
 import {
-  getUserProfileController,
+  getProfileController,
   updateProfileController,
 } from "@/modules/identity/index";
 import { traceRoute } from "@/shared/interceptors/route-handler";
@@ -11,7 +11,7 @@ import { requireAuth } from "@/shared/interceptors/auth-guard";
  */
 export const GET = traceRoute(
   requireAuth(async (req) => {
-    return getUserProfileController(req);
+    return getProfileController(req);
   }),
 );
 

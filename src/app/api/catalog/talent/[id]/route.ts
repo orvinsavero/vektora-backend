@@ -7,10 +7,9 @@ import { traceRoute } from "@/shared/interceptors/route-handler";
  * Maps to: GET /api/catalog/talent/[id]
  */
 export const GET = traceRoute(
-  async (
-    req: NextRequest,
-    context: { params: { id: string } },
-  ): Promise<Response> => {
-    return getTalentController(req, context);
+  async (req: NextRequest, context: { params: Promise<{ id: string }> }) => {
+    const params = await context.params;
+
+    return getTalentController(req, { params });
   },
 );

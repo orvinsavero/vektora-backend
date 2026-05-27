@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { CONFIG } from "@/config/env.config";
 import { categories } from "@/modules/catalog/catalog.schema";
-import { SEED_CATEGORIES } from "@/modules/catalog/config/categories.seed";
+import { SEED_CATEGORIES } from "@/modules/catalog/_shared/config/categories.seed";
 import { appSchema } from "@/shared/database/client";
 
 const seedDatabase = async () => {

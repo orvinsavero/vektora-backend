@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { loginController } from "@/modules/identity/controllers/login";
+import { loginController } from "@/modules/identity/auth/controllers/login.controller";
 import { traceRoute } from "@/shared/interceptors/route-handler";
 
 /**

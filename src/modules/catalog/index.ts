@@ -1,17 +1,26 @@
-export * from "./catalog.constants";
+// 1. Export Shared Database Models & Constraints
 export * from "./catalog.schema";
-export * from "./services/catalog.service";
+export * from "./catalog.constants";
 
-export * from "./request";
-export * from "./response";
+// 2. Export Request Payloads / Form-validators
+export * from "./_shared/request";
+export * from "./_shared/response";
 
-export { registerTalentController } from "./controllers/register-talent";
-export { getTalentController } from "./controllers/get-talent";
-export { getSelfTalentController } from "./controllers/get-self-talent";
-export { updateTalentProfileController } from "./controllers/update-talent";
-export { getCategoriesController } from "./controllers/get-categories";
-export { createPortfolioController } from "./controllers/create-portfolio";
-export { updatePortfolioController } from "./controllers/update-portfolio";
-export { deletePortfolioController } from "./controllers/delete-portfolio";
-export { getTalentPortfoliosController } from "./controllers/get-talent-portfolios";
-export { getPortfolioController } from "./controllers/get-portfolio";
+// 3. Export Taxonomy Sub-Domain Layers
+export { CategoriesService } from "./categories/categories.service";
+export { getCategoriesController } from "./categories/controllers/get-categories.controller";
+
+// 4. Export Talent Sub-Domain Layers
+export { TalentsService } from "./talents/talents.service";
+export { registerTalentController } from "./talents/controllers/register-talent.controller";
+export { getTalentController } from "./talents/controllers/get-talent.controller";
+export { getSelfTalentController } from "./talents/controllers/get-self-talent.controller";
+export { updateTalentProfileController } from "./talents/controllers/update-talent.controller";
+
+// 5. Export Portfolio Sub-Domain Layers
+export { PortfoliosService } from "./portfolios/portfolios.service";
+export { createPortfolioController } from "./portfolios/controllers/create-portfolio.controller";
+export { updatePortfolioController } from "./portfolios/controllers/update-portfolio.controller";
+export { deletePortfolioController } from "./portfolios/controllers/delete-portfolio.controller";
+export { getPortfolioController } from "./portfolios/controllers/get-portfolio.controller";
+export { getTalentPortfoliosController } from "./portfolios/controllers/get-talent-portfolios";
