@@ -11,7 +11,7 @@ export const GET = traceRoute(
     req: NextRequest,
     context: { params: Promise<{ id: string }> },
   ): Promise<Response> => {
-    const params = await context.params;
-    return getTalentPortfoliosController(req, { params });
+    const { id } = await context.params;
+    return getTalentPortfoliosController(req, { params: { id } });
   },
 );

@@ -8,8 +8,8 @@ import { traceRoute } from "@/shared/interceptors/route-handler";
  */
 export const GET = traceRoute(
   async (req: NextRequest, context: { params: Promise<{ id: string }> }) => {
-    const params = await context.params;
+    const { id } = await context.params;
 
-    return getTalentController(req, { params });
+    return getTalentController(req, { params: { id } });
   },
 );
