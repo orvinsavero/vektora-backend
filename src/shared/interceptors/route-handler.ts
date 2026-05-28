@@ -12,10 +12,10 @@ const isProduction = CONFIG.isProduction;
  * Hydrates standard AsyncLocalStorage tracking metrics and unifies request/response telemetry logs.
  * Supports native Next.js dynamic routing parameter contexts via generic rest parameter forwarding.
  */
-export function traceRoute<T extends any[]>(
-  handler: (req: NextRequest, ...args: T) => Promise<Response> | Response,
+export function traceRoute<T extends { params: Promise<any> }>(
+  handler: (req: NextRequest, context: T) => Promise<Response> | Response,
 ) {
-  return async (req: NextRequest, ...args: T): Promise<Response> => {
+  return async (req: NextRequest, context: T): Promise<Response> => {
     const startTime = performance.now();
 
     const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
@@ -62,7 +62,7 @@ export function traceRoute<T extends any[]>(
 
       try {
         // Forward the primary request along with any dynamic Next.js parameters context objects
-        const response = await handler(req, ...args);
+        const response = await handler(req, context);
         const durationMs = parseFloat(
           (performance.now() - startTime).toFixed(2),
         );

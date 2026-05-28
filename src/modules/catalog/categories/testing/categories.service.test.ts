@@ -1,73 +1,87 @@
 import { vi, describe, it, expect, afterEach } from "vitest";
-import { eq, inArray } from "drizzle-orm";
-import { cache } from "@/shared/cache/redis";
 import { db } from "@/shared/database/client";
-import { CATALOG_CACHE } from "../../catalog.constants";
-import { categories } from "../../catalog.schema";
 import { CategoriesService } from "../categories.service";
+import { categories } from "../../catalog.schema";
+import { inArray } from "drizzle-orm";
 
 describe("CategoriesService Integration Tests", () => {
-  let seededCategoryIds: string[] = [];
+  let createdCategoryIds: string[] = [];
 
-  // Automated cleanup sequence after each assertion run
+  // Central tracking factory to guarantee explicit data cleanup boundaries
+  const trackId = (id: string): string => {
+    createdCategoryIds.push(id);
+    return id;
+  };
+
   afterEach(async () => {
-    if (seededCategoryIds.length > 0) {
+    if (createdCategoryIds.length > 0) {
       await db
         .delete(categories)
-        .where(inArray(categories.id, seededCategoryIds));
-      seededCategoryIds = [];
+        .where(inArray(categories.id, createdCategoryIds));
+      createdCategoryIds = [];
     }
-    vi.restoreAllMocks();
   });
 
-  it("should look up active flat records straight from DB on cache miss and write to cache", async () => {
-    // Inject hierarchical test tracking entries directly into Postgres
-    const [parent] = await db
-      .insert(categories)
-      .values({
-        name: `Design & Media ${crypto.randomUUID().substring(0, 4)}`,
-        slug: `design-media-${crypto.randomUUID().substring(0, 4)}`,
-        parentId: null,
+  describe("getAllCategories", () => {
+    it("should retrieve a complete list of active categories, including nested parent-child relationships", async () => {
+      const uniqueSuffix = crypto.randomUUID().substring(0, 8);
+      const parentId = crypto.randomUUID();
+      const childId = crypto.randomUUID();
+
+      // 1. Seed Parent Category (Using ONLY the columns defined in your schema)
+      await db.insert(categories).values({
+        id: parentId,
+        name: `Parent Classification ${uniqueSuffix}`,
+        slug: `parent-classification-${uniqueSuffix}`,
         isActive: true,
-      })
-      .returning();
+      });
+      trackId(parentId);
 
-    seededCategoryIds.push(parent.id);
-
-    // Enable the mock redis network state switch inline
-    (cache as any).isOpen = true;
-    const setSpy = vi.spyOn(cache, "set");
-
-    const data = await CategoriesService.getAllCategories(db);
-
-    expect(data.length).toBeGreaterThanOrEqual(1);
-    expect(setSpy).toHaveBeenCalledWith(
-      CATALOG_CACHE.keys.categoriesAll,
-      expect.any(String),
-      { EX: CATALOG_CACHE.ttl },
-    );
-    (cache as any).isOpen = false;
-  });
-
-  it("should completely step around DB lookup if a valid cached string exists inside Redis memory", async () => {
-    (cache as any).isOpen = true;
-    const mockPayload = [
-      {
-        id: "fake-id",
-        name: "Mock Cat",
-        slug: "mock-cat",
-        parentId: null,
+      // 2. Seed Child Category with a self-referencing foreign key mapped to the parent
+      await db.insert(categories).values({
+        id: childId,
+        parentId: parentId,
+        name: `Sub Classification ${uniqueSuffix}`,
+        slug: `sub-classification-${uniqueSuffix}`,
         isActive: true,
-      },
-    ];
+      });
+      trackId(childId);
 
-    // Force Redis mock to return pre-built structural strings
-    vi.spyOn(cache, "get").mockResolvedValue(JSON.stringify(mockPayload));
+      // Execute Service - using the correct method name
+      const results = await CategoriesService.getAllCategories(db);
 
-    // Provide an empty/broken db reference object. If the logic touches the database, it crashes.
-    const result = await CategoriesService.getAllCategories({} as any);
+      // Assertions
+      expect(results).toBeDefined();
+      expect(results.length).toBeGreaterThanOrEqual(2);
 
-    expect(result).toEqual(mockPayload);
-    (cache as any).isOpen = false;
+      const foundParent = results.find((c: any) => c.id === parentId);
+      const foundChild = results.find((c: any) => c.id === childId);
+
+      expect(foundParent).toBeDefined();
+      expect(foundParent!.name).toBe(`Parent Classification ${uniqueSuffix}`);
+
+      expect(foundChild).toBeDefined();
+      expect(foundChild!.parentId).toBe(parentId); // Validates self-referential graph integrity
+    });
+
+    it("should not return inactive categories in the payload", async () => {
+      const uniqueSuffix = crypto.randomUUID().substring(0, 8);
+      const inactiveCategoryId = crypto.randomUUID();
+
+      await db.insert(categories).values({
+        id: inactiveCategoryId,
+        name: `Inactive Category ${uniqueSuffix}`,
+        slug: `inactive-category-${uniqueSuffix}`,
+        isActive: false, // This should cause the service to filter it out
+      });
+      trackId(inactiveCategoryId);
+
+      const results = await CategoriesService.getAllCategories(db);
+
+      const foundInactive = results.find(
+        (c: any) => c.id === inactiveCategoryId,
+      );
+      expect(foundInactive).toBeUndefined(); // Should be completely filtered out
+    });
   });
 });

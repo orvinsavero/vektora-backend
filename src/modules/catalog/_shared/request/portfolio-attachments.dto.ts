@@ -6,6 +6,7 @@ import { CATALOG_LIMITS, ALLOWED_MEDIA_TYPES } from "../../catalog.constants";
  * Shared across Portfolio project cards and Gig catalog listings.
  */
 export const attachmentInputSchema = z.object({
+  id: z.string().uuid("Invalid attachment ID format.").optional(),
   mediaUrl: z
     .string()
     .trim()

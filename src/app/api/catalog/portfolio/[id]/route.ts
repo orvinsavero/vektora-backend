@@ -29,12 +29,13 @@ export const GET = traceRoute(
  */
 export const PATCH = traceRoute(
   async (req: NextRequest, context: { params: Promise<{ id: string }> }) => {
-    const params = await context.params;
-    const authenticatedWorker = requireTalent(async (authReq) => {
-      return updatePortfolioController(authReq, { params });
-    });
+    // You are correctly awaiting params here.
+    const { id } = await context.params;
 
-    return authenticatedWorker(req);
+    // We pass the resolved ID to the controller or the context wrapper
+    return requireTalent(async (authReq) => {
+      return updatePortfolioController(authReq, { params: { id } });
+    })(req);
   },
 );
 
@@ -45,10 +46,12 @@ export const PATCH = traceRoute(
  */
 export const DELETE = traceRoute(
   async (req: NextRequest, context: { params: Promise<{ id: string }> }) => {
-    const params = await context.params;
-    const authenticatedWorker = requireTalent(async (authReq) => {
-      return deletePortfolioController(authReq, { params });
-    });
-    return authenticatedWorker(req);
+    // You are correctly awaiting params here.
+    const { id } = await context.params;
+
+    // We pass the resolved ID to the controller or the context wrapper
+    return requireTalent(async (authReq) => {
+      return deletePortfolioController(authReq, { params: { id } });
+    })(req);
   },
 );

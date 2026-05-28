@@ -24,3 +24,4 @@ export { updatePortfolioController } from "./portfolios/controllers/update-portf
 export { deletePortfolioController } from "./portfolios/controllers/delete-portfolio.controller";
 export { getPortfolioController } from "./portfolios/controllers/get-portfolio.controller";
 export { getTalentPortfoliosController } from "./portfolios/controllers/get-talent-portfolios";
+export { getSelfPortfoliosController } from "./portfolios/controllers/get-self-portfolios.controller";

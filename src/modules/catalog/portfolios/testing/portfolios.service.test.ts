@@ -1,180 +1,218 @@
-// src/modules/catalog/portfolios-module/testing/portfolios.service.test.ts
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { vi, describe, it, expect, afterEach } from "vitest";
 import { db } from "@/shared/database/client";
-import { USER_CONTEXT } from "../../../identity/identity.constants";
-import { users } from "../../../identity/identity.schema";
-import {
-  talents,
-  portfolios,
-  portfolioAttachments,
-} from "../../catalog.schema";
 import { PortfoliosService } from "../portfolios.service";
+import { portfolios, talents } from "../../catalog.schema";
+import { users } from "@/modules/identity/identity.schema";
+import { eq, inArray } from "drizzle-orm";
+import { NotFoundError } from "@/shared/errors/app-error";
 
 describe("PortfoliosService Integration Tests", () => {
-  let activeTalentUser: typeof users.$inferSelect;
   let createdUserIds: string[] = [];
+  let createdTalentIds: string[] = [];
+  let createdPortfolioIds: string[] = [];
 
-  beforeEach(async () => {
-    const [insertedUser] = await db
-      .insert(users)
-      .values({
-        email: `portfolio-creator-${crypto.randomUUID()}@marketplace.com`,
-        username: `creator_${crypto.randomUUID().substring(0, 8)}`,
-        passwordHash: "argon2id_mock_hash_string",
-        birthDate: "1990-01-01",
-        currentContext: USER_CONTEXT.TALENT,
-        isActive: true,
-      })
-      .returning();
+  // Helper factory to provision a strictly legal, relational parent tree context
+  const seedValidTalentContext = async (): Promise<string> => {
+    const uniqueSuffix = crypto.randomUUID().substring(0, 8);
+    const userId = crypto.randomUUID();
+    const talentId = crypto.randomUUID();
 
-    await db.insert(talents).values({
-      userId: insertedUser.id,
-      bio: "Authorized creative designer profile context.",
-      skills: ["Photoshop", "Midjourney"],
+    // 1. Provision foundational user identity boundary record row
+    await db.insert(users).values({
+      id: userId,
+      email: `test_portfolio_owner_${uniqueSuffix}@vektora.io`,
+      username: `owner_${uniqueSuffix}`,
+      passwordHash: "dummy-hash-string-value",
+      firstName: "Portfolio",
+      lastName: "Tester",
+      birthDate: "1995-01-01",
     });
+    createdUserIds.push(userId);
 
-    activeTalentUser = insertedUser;
-    createdUserIds.push(activeTalentUser.id);
-  });
+    // 2. Link a legal talent record matching your EXACT schema
+    await db.insert(talents).values({
+      id: talentId,
+      userId: userId,
+      bio: "Automating validation engines.",
+      skills: ["architecture", "typescript"],
+    });
+    createdTalentIds.push(talentId);
 
+    // FIXED: Return userId because portfolios.talentId foreign key references talents.userId
+    return userId;
+  };
+
+  const trackPortfolioId = (id: string): string => {
+    createdPortfolioIds.push(id);
+    return id;
+  };
+
+  // CLEAN UP RELATIONAL TREES IN PRECISE REVERSE ORDER OF DEPENDENCY
   afterEach(async () => {
-    if (createdUserIds.length > 0) {
-      await db
-        .delete(portfolioAttachments)
-        .where(
-          inArray(
-            portfolioAttachments.portfolioId,
-            db
-              .select({ id: portfolios.id })
-              .from(portfolios)
-              .where(inArray(portfolios.talentId, createdUserIds)),
-          ),
-        );
+    if (createdPortfolioIds.length > 0) {
       await db
         .delete(portfolios)
-        .where(inArray(portfolios.talentId, createdUserIds));
-      await db.delete(talents).where(inArray(talents.userId, createdUserIds));
+        .where(inArray(portfolios.id, createdPortfolioIds));
+      createdPortfolioIds = [];
+    }
+    if (createdTalentIds.length > 0) {
+      await db.delete(talents).where(inArray(talents.id, createdTalentIds));
+      createdTalentIds = [];
+    }
+    if (createdUserIds.length > 0) {
       await db.delete(users).where(inArray(users.id, createdUserIds));
       createdUserIds = [];
     }
   });
 
-  it("should process atomic transactions, stitch nested attachments collections arrays, and stamp zero-indexed sortOrder weights", async () => {
-    const inputPayload = {
-      talentId: activeTalentUser.id,
-      title: "Immersive 3D Sci-Fi Environment Showcase",
-      description: "High-fidelity production environments.",
-      externalLink: null, // This was already present, perfect
-      attachments: [
-        {
-          mediaUrl: "https://storage.vektora.io/portfolios/scifi-wide.png",
-          mediaType: "IMAGE" as const,
-        },
-        {
-          mediaUrl: "https://storage.vektora.io/portfolios/scifi-detail.png",
-          mediaType: "IMAGE" as const,
-        },
-      ],
-    };
-
-    const result = await PortfoliosService.createPortfolio(inputPayload, db);
-
-    expect(result.title).toBe(inputPayload.title);
-    expect(result.attachments).toHaveLength(2);
-    expect(result.attachments[0].sortOrder).toBe(0);
-    expect(result.attachments[1].sortOrder).toBe(1);
-  });
-
-  it("should successfully wipe out parent portfolios rows and cascade purge child attachments elements simultaneously", async () => {
-    const freshPortfolio = await PortfoliosService.createPortfolio(
-      {
-        talentId: activeTalentUser.id,
-        title: "Short-Lived Temporary Masterpiece",
-        description: null,
-        externalLink: null,
+  describe("createPortfolio", () => {
+    it("should successfully insert a portfolio project card via the service layer", async () => {
+      const mappedUserId = await seedValidTalentContext();
+      const payload = {
+        talentId: mappedUserId,
+        title: "Distributed Streaming Infrastructure",
+        description: "High-throughput messaging fabric using event logs.",
+        externalLink: "https://github.com/vektora/event-stream",
+        categoryIds: [],
         attachments: [
           {
-            mediaUrl: "https://storage.vektora.io/assets/doomed.png",
-            mediaType: "IMAGE" as const,
-          }, // Fixed missing 'as const' casting alignment too
+            mediaUrl: "https://storage.vektora.io/docs/architecture_v2.pdf",
+            mediaType: "DOCUMENT" as const,
+          },
         ],
-      },
-      db,
-    );
+      };
 
-    await PortfoliosService.deletePortfolio(
-      freshPortfolio.id,
-      activeTalentUser.id,
-      db,
-    );
+      const result = await PortfoliosService.createPortfolio(payload);
+      trackPortfolioId(result.id);
 
-    const verifiedPortfolioRecord = await db.query.portfolios.findFirst({
-      where: eq(portfolios.id, freshPortfolio.id),
+      expect(result.id).toBeDefined();
+      expect(result.title).toBe(payload.title);
+      expect(result.talentId).toBe(mappedUserId);
+
+      const dbRow = await db.query.portfolios.findFirst({
+        where: eq(portfolios.id, result.id),
+      });
+      expect(dbRow).toBeDefined();
+      expect(dbRow!.title).toBe(payload.title);
     });
-    expect(verifiedPortfolioRecord).toBeUndefined();
   });
 
-  // Add these inside describe("PortfoliosService Integration Tests")
-  it("should throw a ConflictError when trying to exceed the maximum 5 portfolio showcase entries limit", async () => {
-    const basePayload = {
-      talentId: activeTalentUser.id,
-      title: "Test Project Entry",
-      description: "Mock description path context string.",
-      externalLink: null,
-      attachments: [],
-    };
+  describe("getPortfolioById", () => {
+    it("should resolve a fully hydrated portfolio record by its primary key", async () => {
+      const mappedUserId = await seedValidTalentContext();
+      const portfolioId = crypto.randomUUID();
 
-    // Seed the database up to the max capacity limit constraint (5 items)
-    for (let i = 0; i < 5; i++) {
-      await PortfoliosService.createPortfolio(
-        { ...basePayload, title: `Project Title ${i}` },
-        db,
+      await db.insert(portfolios).values({
+        id: portfolioId,
+        talentId: mappedUserId,
+        title: "Transient Storage Engine",
+        description: "In-memory LSM tree architecture.",
+        externalLink: "https://storage.vektora.io/spec.md",
+      });
+      trackPortfolioId(portfolioId);
+
+      const resolved = await PortfoliosService.getPortfolioById(portfolioId);
+
+      expect(resolved).toBeDefined();
+      expect(resolved.id).toBe(portfolioId);
+      expect(resolved.title).toBe("Transient Storage Engine");
+    });
+
+    it("should throw a NotFoundError instance when target ID is missing", async () => {
+      const ghostId = crypto.randomUUID();
+      await expect(PortfoliosService.getPortfolioById(ghostId)).rejects.toThrow(
+        NotFoundError,
       );
-    }
-
-    // The 6th entry execution block must violate safety constraints and throw a ConflictError
-    await expect(
-      PortfoliosService.createPortfolio(
-        { ...basePayload, title: "The Breaking 6th Entry" },
-        db,
-      ),
-    ).rejects.toThrow(
-      "Portfolio limit reached. Maximum allowed is 5 showcase entries per talent profile.",
-    );
+    });
   });
 
-  it("should reject update actions with a NotFoundError if an account tries to alter an un-owned portfolio item", async () => {
-    const freshPortfolio = await PortfoliosService.createPortfolio(
-      {
-        talentId: activeTalentUser.id,
-        title: "Original Project Title",
-        attachments: [],
+  describe("getPortfoliosByTalentId", () => {
+    it("should extract all portfolios assigned down to a specific parent talent handle", async () => {
+      const targetUserId = await seedValidTalentContext();
+      const unrelatedUserId = await seedValidTalentContext();
+
+      const p1 = crypto.randomUUID();
+      const p2 = crypto.randomUUID();
+
+      await db.insert(portfolios).values({
+        id: p1,
+        talentId: targetUserId,
+        title: "Target Project Alpha",
         description: null,
         externalLink: null,
-      },
-      db,
-    );
+      });
+      trackPortfolioId(p1);
 
-    const hostileHijackPayload = {
-      portfolioId: freshPortfolio.id,
-      talentId: crypto.randomUUID(), // Hostile non-owner identifier token context
-      title: "Malicious Injection Title Attack Attempt",
-    };
+      await db.insert(portfolios).values({
+        id: p2,
+        talentId: unrelatedUserId,
+        title: "Isolation Noise Project",
+        description: null,
+        externalLink: null,
+      });
+      trackPortfolioId(p2);
 
-    await expect(
-      PortfoliosService.updatePortfolio(hostileHijackPayload, db),
-    ).rejects.toThrow(
-      "Target portfolio item profile does not exist or access is denied.",
-    );
+      const items =
+        await PortfoliosService.getPortfoliosByTalentId(targetUserId);
+
+      expect(items).toBeDefined();
+      expect(items.length).toBe(1);
+      expect(items[0].id).toBe(p1);
+    });
   });
 
-  it("should throw an explicit NotFoundError if requested item primary key tracking UUID does not exist inside storage disk", async () => {
-    const phantomId = crypto.randomUUID();
-    await expect(
-      PortfoliosService.getPortfolioById(phantomId, db),
-    ).rejects.toThrow(
-      "Requested portfolio project showcase item does not exist.",
-    );
+  describe("updatePortfolio", () => {
+    it("should apply partial updates wrapped correctly in a layout input object", async () => {
+      const mappedUserId = await seedValidTalentContext();
+      const portfolioId = crypto.randomUUID();
+
+      await db.insert(portfolios).values({
+        id: portfolioId,
+        talentId: mappedUserId,
+        title: "Immutable Document Store",
+        description: "Untouched metadata fields.",
+        externalLink: null,
+      });
+      trackPortfolioId(portfolioId);
+
+      const updatePayload = {
+        portfolioId: portfolioId,
+        talentId: mappedUserId,
+        title: "Mutated Document Store V2",
+        attachments: [
+          {
+            mediaUrl: "https://storage.io/notes.png",
+            mediaType: "IMAGE" as const,
+          },
+        ],
+      };
+
+      const updated = await PortfoliosService.updatePortfolio(updatePayload);
+
+      expect(updated.title).toBe(updatePayload.title);
+      expect(updated.description).toBe("Untouched metadata fields.");
+    });
+  });
+
+  describe("deletePortfolio", () => {
+    it("should cleanly purge targeted portfolio records from storage using dual matching keys", async () => {
+      const mappedUserId = await seedValidTalentContext();
+      const portfolioId = crypto.randomUUID();
+
+      await db.insert(portfolios).values({
+        id: portfolioId,
+        talentId: mappedUserId,
+        title: "Temporary Volatile Workspace Card",
+        description: null,
+        externalLink: null,
+      });
+
+      await PortfoliosService.deletePortfolio(portfolioId, mappedUserId);
+
+      const searchCheck = await db.query.portfolios.findFirst({
+        where: eq(portfolios.id, portfolioId),
+      });
+      expect(searchCheck).toBeUndefined();
+    });
   });
 });

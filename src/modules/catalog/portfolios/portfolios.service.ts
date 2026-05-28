@@ -1,4 +1,4 @@
-import { and, eq, count } from "drizzle-orm";
+import { and, eq, count, notInArray } from "drizzle-orm";
 import { db as defaultDb } from "@/shared/database/client";
 import { ConflictError, NotFoundError } from "@/shared/errors/app-error";
 import { portfolios, portfolioAttachments } from "../catalog.schema";
@@ -90,18 +90,24 @@ export class PortfoliosService {
     db: DatabaseClient = defaultDb,
   ) {
     return await db.transaction(async (tx) => {
-      const updateData: Record<string, any> = {};
-      if (input.title !== undefined) updateData.title = input.title;
-      if (input.description !== undefined)
-        updateData.description = input.description;
-      if (input.externalLink !== undefined)
-        updateData.externalLink = input.externalLink;
+      // 1. Update text properties (Atomic operation)
+      const updateData = {
+        title: input.title,
+        description: input.description,
+        externalLink: input.externalLink,
+      };
+
+      // Clean updateData object by removing undefined values
+      Object.keys(updateData).forEach(
+        (key) =>
+          (updateData as any)[key] === undefined &&
+          delete (updateData as any)[key],
+      );
 
       let updatedPortfolio: typeof portfolios.$inferSelect | undefined;
 
-      // 1. Only query table modifications if textual changes are present
       if (Object.keys(updateData).length > 0) {
-        const [record] = await tx
+        [updatedPortfolio] = await tx
           .update(portfolios)
           .set(updateData)
           .where(
@@ -111,9 +117,7 @@ export class PortfoliosService {
             ),
           )
           .returning();
-        updatedPortfolio = record;
       } else {
-        // Fallback pass to verify record state ownership match parameters
         updatedPortfolio = await tx.query.portfolios.findFirst({
           where: and(
             eq(portfolios.id, input.portfolioId),
@@ -124,47 +128,62 @@ export class PortfoliosService {
 
       if (!updatedPortfolio) {
         throw new NotFoundError(
-          "Target portfolio item profile does not exist or access is denied.",
+          "Target portfolio item profile does not exist.",
         );
       }
 
-      // 2. Short-circuit sub-resource syncing if media arrays parameters are omitted
-      if (input.attachments === undefined) {
-        const currentAttachments = await tx
-          .select()
-          .from(portfolioAttachments)
-          .where(eq(portfolioAttachments.portfolioId, input.portfolioId))
-          .orderBy(portfolioAttachments.sortOrder);
+      // 2. Handle Attachment Diffing (ONLY if attachments are provided)
+      if (input.attachments !== undefined) {
+        const incoming = input.attachments;
+        const incomingIds = incoming
+          .map((a) => a.id)
+          .filter((id): id is string => !!id);
 
-        return { ...updatedPortfolio, attachments: currentAttachments };
+        // A. DELETE: Remove attachments belonging to this portfolio that ARE NOT in the new list
+        // This is more efficient than doing it in JS memory
+        await tx
+          .delete(portfolioAttachments)
+          .where(
+            and(
+              eq(portfolioAttachments.portfolioId, input.portfolioId),
+              incomingIds.length > 0
+                ? notInArray(portfolioAttachments.id, incomingIds)
+                : undefined,
+            ),
+          );
+
+        // B. UPSERT: Update existing or Insert new
+        for (const [index, item] of incoming.entries()) {
+          if (item.id) {
+            // Update existing
+            await tx
+              .update(portfolioAttachments)
+              .set({
+                mediaUrl: item.mediaUrl,
+                mediaType: item.mediaType,
+                sortOrder: index,
+              })
+              .where(eq(portfolioAttachments.id, item.id));
+          } else {
+            // Insert new
+            await tx.insert(portfolioAttachments).values({
+              portfolioId: updatedPortfolio.id,
+              mediaUrl: item.mediaUrl,
+              mediaType: item.mediaType,
+              sortOrder: index,
+            });
+          }
+        }
       }
 
-      // 3. Atomically drop old attachments metrics cards loops
-      await tx
-        .delete(portfolioAttachments)
-        .where(eq(portfolioAttachments.portfolioId, input.portfolioId));
+      // 3. Return re-hydrated state
+      const finalAttachments = await tx
+        .select()
+        .from(portfolioAttachments)
+        .where(eq(portfolioAttachments.portfolioId, updatedPortfolio.id))
+        .orderBy(portfolioAttachments.sortOrder);
 
-      if (input.attachments.length === 0) {
-        return { ...updatedPortfolio, attachments: [] };
-      }
-
-      // 4. Append fresh replacements using fresh sequential arrays map indexing
-      const operationalAttachmentsPayload: Array<
-        typeof portfolioAttachments.$inferInsert
-      > = input.attachments.map((item, index) => ({
-        portfolioId: updatedPortfolio!.id,
-        mediaUrl: item.mediaUrl as string,
-        mediaType:
-          item.mediaType as typeof portfolioAttachments.$inferInsert.mediaType,
-        sortOrder: index,
-      }));
-
-      const insertedAttachments = await tx
-        .insert(portfolioAttachments)
-        .values(operationalAttachmentsPayload)
-        .returning();
-
-      return { ...updatedPortfolio, attachments: insertedAttachments };
+      return { ...updatedPortfolio, attachments: finalAttachments };
     });
   }
 
